@@ -1,0 +1,13 @@
+# Exclude secrets and API keys (CRITICAL)
+.env
+credentials.json
+
+# Exclude virtual environments
+.venv/
+env/
+venv/
+
+# Exclude Python cache/system files
+__pycache__/
+*.pyc
+.DS_Store

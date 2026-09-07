@@ -1,0 +1,22 @@
+{
+  "google_sheet_name": "Macro Tracker",
+  "credentials_file": "credentials.json",
+  "profiles": {
+    "Justin": {
+      "daily_limits": {
+        "calories": 2050,
+        "protein": 160,
+        "carbs": 210,
+        "fat": 70
+      }
+    },
+    "Jackie": {
+      "daily_limits": {
+        "calories": 1800,
+        "protein": 130,
+        "carbs": 180,
+        "fat": 60
+      }
+    }
+  }
+}
