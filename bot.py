@@ -1,18 +1,20 @@
 from datetime import datetime
 import json
 import os
+import certifi
 from config_manager import load_config, save_config
+from master_log_manager import create_master_log_manager
+from oauth_manager import OAuthManager
+from spreadsheet_manager import connect_user_spreadsheet, get_current_month_worksheet
+from user_store import UserStore
+
+os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from sheet_manager import (
-    connect_sheets,
-    get_or_create_worksheet,
-    handle_day_transition,
-)
-
 load_dotenv()
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -21,8 +23,10 @@ SHEET_NAME = os.getenv("GOOGLE_SHEET_NAME", "Macro Tracker")
 
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 config = load_config()
-spreadsheet = connect_sheets(
-    {"credentials_file": "credentials.json", "google_sheet_name": SHEET_NAME}
+user_store = UserStore()
+oauth_manager = OAuthManager(user_store=user_store)
+master_log_manager = create_master_log_manager(
+    config, SHEET_NAME
 )
 
 intents = discord.Intents.default()
@@ -74,9 +78,26 @@ async def on_message(message):
 
     if isinstance(message.channel, discord.DMChannel):
         user_name = message.author.display_name.strip()
+        discord_id = str(message.author.id)
         await message.channel.send("🔄 Processing message with AI...")
 
         try:
+            user = user_store.get(discord_id)
+            if user is None:
+                user_store._upsert(discord_id, user_name)
+                user = user_store.get(discord_id)
+            credentials = oauth_manager.get_credentials(user)
+            if credentials is None:
+                authorization_url = oauth_manager.create_authorization(
+                    discord_id, user_name
+                )
+                await message.channel.send(
+                    "🔐 Please authorize Google Sheets using this private link:\n"
+                    f"{authorization_url}\n\n"
+                    "After approving access, send your meal message again."
+                )
+                return
+
             parsed = parse_input_with_ai(message.content)
             intent = parsed.get("intent", "LOG_MEAL")
 
@@ -128,15 +149,23 @@ async def on_message(message):
                 f = parsed.get("fat", 0)
                 is_est = parsed.get("is_estimation", False)
 
-                sheet = get_or_create_worksheet(spreadsheet, user_name)
-                handle_day_transition(sheet, user_limits)
+                user = user_store.get(discord_id)
+                user_spreadsheet = connect_user_spreadsheet(
+                    credentials, user, user_store
+                )
+                sheet = get_current_month_worksheet(user_spreadsheet)
 
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-                sheet.append_row([now_str, meal_name, cals, p, c, f])
+                values = [now_str, meal_name, cals, p, c, f]
+                sheet.append_row(values)
+                master_log_manager.log_if_approved(
+                    discord_id, user_name, values
+                )
 
                 est_tag = " (AI Estimated)" if is_est else " (Manual Input)"
                 reply = (
-                    f"✅ **Logged to sheet tab [{user_name}]!**{est_tag}\n"
+                    f"✅ **Logged to your Google Sheet tab "
+                    f"[{datetime.now().strftime('%B %Y')}]!**{est_tag}\n"
                     f"**Meal:** {meal_name}\n"
                     f"**Calories:** {cals} kcal | **P:** {p}g | **C:** {c}g | **F:** {f}g"
                 )
