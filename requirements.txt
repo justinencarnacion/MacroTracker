@@ -1,0 +1,7 @@
+certifi
+discord.py
+gspread
+google-auth
+google-auth-oauthlib
+google-genai
+python-dotenv

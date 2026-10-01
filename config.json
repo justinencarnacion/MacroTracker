@@ -17,6 +17,14 @@
         "carbs": 180,
         "fat": 60
       }
+    },
+    "jaastuun": {
+      "daily_limits": {
+        "calories": 2050,
+        "protein": 160,
+        "carbs": 210,
+        "fat": 70
+      }
     }
   }
 }

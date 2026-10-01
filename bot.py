@@ -1,11 +1,11 @@
 from datetime import datetime
 import json
+import logging
 import os
 import certifi
 from config_manager import load_config, save_config
 from master_log_manager import create_master_log_manager
-from oauth_manager import OAuthManager
-from spreadsheet_manager import connect_user_spreadsheet, get_current_month_worksheet
+from sheet_manager import connect_sheets, get_or_create_worksheet
 from user_store import UserStore
 
 os.environ.setdefault("SSL_CERT_FILE", certifi.where())
@@ -21,10 +21,18 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 SHEET_NAME = os.getenv("GOOGLE_SHEET_NAME", "Macro Tracker")
 
+if not DISCORD_TOKEN:
+    raise RuntimeError("DISCORD_TOKEN is required.")
+if not GEMINI_API_KEY:
+    raise RuntimeError("GEMINI_API_KEY is required.")
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 config = load_config()
 user_store = UserStore()
-oauth_manager = OAuthManager(user_store=user_store)
+shared_spreadsheet = connect_sheets(config)
 master_log_manager = create_master_log_manager(
     config, SHEET_NAME
 )
@@ -33,6 +41,13 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+DEFAULT_LIMITS = {
+    "calories": 2050,
+    "protein": 160,
+    "carbs": 210,
+    "fat": 70,
+}
 
 SYSTEM_PROMPT = """
 You are an expert nutrition assistant. Analyze the user's message.
@@ -66,6 +81,27 @@ def parse_input_with_ai(user_text):
     return json.loads(response.text)
 
 
+def worksheet_title(display_name, discord_id):
+    """Create a readable, unique Google Sheets worksheet title."""
+    safe_name = "".join(
+        character for character in display_name if character not in "[]:*?/\\"
+    ).strip()
+    safe_name = safe_name or "Discord User"
+    suffix = f" ({discord_id[-6:]})"
+    return f"{safe_name[:100 - len(suffix)]}{suffix}"
+
+
+def get_user_limits(cfg, discord_id, display_name):
+    profiles = cfg.setdefault("profiles", {})
+    profile = profiles.get(discord_id) or profiles.get(display_name)
+    return dict(profile["daily_limits"]) if profile else dict(DEFAULT_LIMITS)
+
+
+def save_user_limits(cfg, discord_id, limits):
+    cfg.setdefault("profiles", {})[discord_id] = {"daily_limits": limits}
+    save_config(cfg)
+
+
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}! Universal DM Macro Bot is online.")
@@ -85,39 +121,15 @@ async def on_message(message):
             user = user_store.get(discord_id)
             if user is None:
                 user_store._upsert(discord_id, user_name)
-                user = user_store.get(discord_id)
-            credentials = oauth_manager.get_credentials(user)
-            if credentials is None:
-                authorization_url = oauth_manager.create_authorization(
-                    discord_id, user_name
-                )
-                await message.channel.send(
-                    "🔐 Please authorize Google Sheets using this private link:\n"
-                    f"{authorization_url}\n\n"
-                    "After approving access, send your meal message again."
-                )
-                return
+            elif user["display_name"] != user_name:
+                user_store._upsert(discord_id, user_name)
 
             parsed = parse_input_with_ai(message.content)
             intent = parsed.get("intent", "LOG_MEAL")
 
             # Load latest configuration
             cfg = load_config()
-            if "profiles" not in cfg:
-                cfg["profiles"] = {}
-
-            # Fallback limits if profile is new
-            user_limits = cfg["profiles"].get(
-                user_name,
-                {
-                    "daily_limits": {
-                        "calories": 2050,
-                        "protein": 160,
-                        "carbs": 210,
-                        "fat": 70,
-                    }
-                },
-            )["daily_limits"]
+            user_limits = get_user_limits(cfg, discord_id, user_name)
 
             if intent == "UPDATE_GOALS":
                 new_limits = {
@@ -129,8 +141,7 @@ async def on_message(message):
                     "fat": parsed.get("fat", user_limits["fat"]),
                 }
 
-                cfg["profiles"][user_name] = {"daily_limits": new_limits}
-                save_config(cfg)
+                save_user_limits(cfg, discord_id, new_limits)
 
                 reply = (
                     f"🎯 **Updated Daily Goals for [{user_name}]!**\n"
@@ -149,11 +160,10 @@ async def on_message(message):
                 f = parsed.get("fat", 0)
                 is_est = parsed.get("is_estimation", False)
 
-                user = user_store.get(discord_id)
-                user_spreadsheet = connect_user_spreadsheet(
-                    credentials, user, user_store
+                sheet = get_or_create_worksheet(
+                    shared_spreadsheet,
+                    worksheet_title(user_name, discord_id),
                 )
-                sheet = get_current_month_worksheet(user_spreadsheet)
 
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
                 values = [now_str, meal_name, cals, p, c, f]
@@ -171,8 +181,11 @@ async def on_message(message):
                 )
                 await message.channel.send(reply)
 
-        except Exception as err:
-            await message.channel.send(f"❌ Error: {err}")
+        except Exception:
+            logger.exception("Failed to process Discord message for %s", discord_id)
+            await message.channel.send(
+                "❌ I could not process that message. Please try again."
+            )
 
 
 bot.run(DISCORD_TOKEN)
