@@ -1,7 +1,9 @@
 from datetime import datetime
 from config_manager import load_config, save_config
 from display import display_dashboard, prompt_num
+from settings import SettingsError, load_google_credentials
 from sheet_manager import (
+    SheetConnectionError,
     connect_sheets,
     get_or_create_worksheet,
     get_totals_for_date,
@@ -113,7 +115,14 @@ def create_new_profile(spreadsheet, config):
 def main():
     config = load_config()
     print("Connecting to Google Sheets...")
-    spreadsheet = connect_sheets(config)
+    try:
+        spreadsheet = connect_sheets(
+            load_google_credentials(config["credentials_file"]),
+            config["google_sheet_name"],
+        )
+    except (SettingsError, SheetConnectionError) as error:
+        print(f"\n[Connection Error]: {error}")
+        return
 
     while True:
         profiles = list(config["profiles"].keys())
