@@ -30,3 +30,9 @@ Keep the terminal and computer running while testing from Discord mobile.
 
 The Google OAuth modules remain in the project for a future version where
 each user owns a separate spreadsheet. They are not used by the Phase 1 bot.
+
+## Run the tests
+
+```bash
+python -m unittest discover -s tests
+```

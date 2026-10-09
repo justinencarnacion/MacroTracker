@@ -4,8 +4,18 @@ import logging
 import os
 import certifi
 from config_manager import load_config, save_config
+from bot_messages import (
+    add_totals,
+    format_meal_logged,
+    parse_macros,
+    worksheet_title,
+)
 from master_log_manager import create_master_log_manager
-from sheet_manager import connect_sheets, get_or_create_worksheet
+from sheet_manager import (
+    connect_sheets,
+    get_or_create_worksheet,
+    get_totals_for_date,
+)
 from user_store import UserStore
 
 os.environ.setdefault("SSL_CERT_FILE", certifi.where())
@@ -81,16 +91,6 @@ def parse_input_with_ai(user_text):
     return json.loads(response.text)
 
 
-def worksheet_title(display_name, discord_id):
-    """Create a readable, unique Google Sheets worksheet title."""
-    safe_name = "".join(
-        character for character in display_name if character not in "[]:*?/\\"
-    ).strip()
-    safe_name = safe_name or "Discord User"
-    suffix = f" ({discord_id[-6:]})"
-    return f"{safe_name[:100 - len(suffix)]}{suffix}"
-
-
 def get_user_limits(cfg, discord_id, display_name):
     profiles = cfg.setdefault("profiles", {})
     profile = profiles.get(discord_id) or profiles.get(display_name)
@@ -154,30 +154,37 @@ async def on_message(message):
 
             else:  # LOG_MEAL
                 meal_name = parsed.get("meal_name", "Meal")
-                cals = parsed.get("calories", 0)
-                p = parsed.get("protein", 0)
-                c = parsed.get("carbs", 0)
-                f = parsed.get("fat", 0)
+                macros = parse_macros(parsed)
                 is_est = parsed.get("is_estimation", False)
 
-                sheet = get_or_create_worksheet(
-                    shared_spreadsheet,
-                    worksheet_title(user_name, discord_id),
+                tab_title = worksheet_title(user_name, discord_id)
+                sheet = get_or_create_worksheet(shared_spreadsheet, tab_title)
+
+                now = datetime.now()
+                today_totals = get_totals_for_date(
+                    sheet, now.strftime("%Y-%m-%d")
                 )
 
-                now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-                values = [now_str, meal_name, cals, p, c, f]
+                values = [
+                    now.strftime("%Y-%m-%d %H:%M"),
+                    meal_name,
+                    macros["calories"],
+                    macros["protein"],
+                    macros["carbs"],
+                    macros["fat"],
+                ]
                 sheet.append_row(values)
                 master_log_manager.log_if_approved(
                     discord_id, user_name, values
                 )
 
-                est_tag = " (AI Estimated)" if is_est else " (Manual Input)"
-                reply = (
-                    f"✅ **Logged to your Google Sheet tab "
-                    f"[{datetime.now().strftime('%B %Y')}]!**{est_tag}\n"
-                    f"**Meal:** {meal_name}\n"
-                    f"**Calories:** {cals} kcal | **P:** {p}g | **C:** {c}g | **F:** {f}g"
+                reply = format_meal_logged(
+                    meal_name,
+                    macros,
+                    is_est,
+                    tab_title,
+                    add_totals(today_totals, macros),
+                    user_limits,
                 )
                 await message.channel.send(reply)
 
