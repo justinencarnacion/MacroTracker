@@ -18,7 +18,7 @@ SCOPES = [
 
 
 class OAuthManager:
-    def __init__(self, client_file="oauth_client.json", user_store=None):
+    def __init__(self, client_file="secrets/oauth_client.json", user_store=None):
         self.client_file = Path(client_file)
         self.user_store = user_store
         self.pending = {}

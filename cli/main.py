@@ -1,8 +1,8 @@
 from datetime import datetime
-from config_manager import load_config, save_config
-from display import display_dashboard, prompt_num
-from settings import SettingsError, load_google_credentials
-from sheet_manager import (
+from cli.config_manager import load_config, save_config
+from cli.display import display_dashboard, prompt_num
+from core.settings import SettingsError, load_google_credentials
+from sheets.sheet_manager import (
     SheetConnectionError,
     connect_sheets,
     get_or_create_worksheet,

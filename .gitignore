@@ -1,6 +1,18 @@
-# Exclude secrets and API keys (CRITICAL)
+# Secrets (CRITICAL): everything in secrets/ except the template and its README
+secrets/*
+!secrets/.env.example
+!secrets/README.md
+# Also block secret files anywhere else, in case one is misplaced
 .env
 credentials.json
+oauth_client.json
+
+# Bot database and backups
+data/
+storage/
+*.db
+*.db.bak
+*.sqlite3
 
 # Exclude virtual environments
 .venv/
@@ -11,12 +23,6 @@ venv/
 __pycache__/
 *.pyc
 .DS_Store
-oauth_client.json
-storage/
-*.db
-*.sqlite3
-# Local bot data when running with Docker
-data/
 
-# Written on the Pi by deploy.sh for --rollback
+# Written on the Pi by deploy/deploy.sh for --rollback
 .deploy-previous

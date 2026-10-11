@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Deploy the code on GitHub (origin/main) to the Raspberry Pi.
 #
-#   ./deploy.sh              check, test, then update and restart the bot on the Pi
-#   ./deploy.sh --rollback   put the Pi back on the version it ran before the last deploy
+#   ./deploy/deploy.sh              check, test, then update and restart the bot on the Pi
+#   ./deploy/deploy.sh --rollback   put the Pi back on the version it ran before the last deploy
 #
-# Secrets (.env, credentials.json) are never copied; scp them manually when they change.
+# Secrets (secrets/.env, secrets/credentials.json) are never copied; scp them manually when they change.
 # Override the target with DEPLOY_HOST (default: the "macrotracker" SSH alias).
 set -euo pipefail
 
 HOST="${DEPLOY_HOST:-macrotracker}"
 BRANCH="main"
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 red() { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
@@ -21,7 +21,7 @@ case "${1:-}" in
   "") MODE="deploy" ;;
   --rollback) MODE="rollback" ;;
   -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
-  *) fail "Unknown option '$1'. Use ./deploy.sh or ./deploy.sh --rollback" ;;
+  *) fail "Unknown option '$1'. Use ./deploy/deploy.sh or ./deploy/deploy.sh --rollback" ;;
 esac
 
 if [ "$MODE" = "deploy" ]; then
@@ -68,7 +68,15 @@ cd ~/MacroTracker
 previous_file=".deploy-previous"
 current="$(git rev-parse HEAD)"
 
-bot_running() { [ -n "$(docker compose ps --status running -q)" ]; }
+# Compose file lives in deploy/; older versions (before the folder reorganization)
+# kept it at the project root, which a rollback may return to.
+dc() {
+  local file="deploy/docker-compose.yml"
+  [ -f "$file" ] || file="docker-compose.yml"
+  docker compose -f "$file" "$@"
+}
+
+bot_running() { [ -n "$(dc ps --status running -q)" ]; }
 
 if [ "$mode" = "rollback" ]; then
   [ -f "$previous_file" ] || { echo "✗ No earlier deploy recorded; nothing to roll back to."; exit 1; }
@@ -93,12 +101,12 @@ else
 fi
 
 since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-docker compose up -d --build --force-recreate
+dc up -d --build --force-recreate
 
 echo "Waiting for the bot to log in..."
 for _ in $(seq 1 45); do
-  if docker compose logs --since "$since" 2>&1 | grep "Logged in as" >/dev/null; then
-    docker compose logs --since "$since" 2>&1 | grep -E "Connected to spreadsheet|Logged in as" | sed 's/^[^|]*| //'
+  if dc logs --since "$since" 2>&1 | grep "Logged in as" >/dev/null; then
+    dc logs --since "$since" 2>&1 | grep -E "Connected to spreadsheet|Logged in as" | sed 's/^[^|]*| //'
     echo "✓ Bot is online"
     exit 0
   fi
@@ -107,12 +115,12 @@ for _ in $(seq 1 45); do
 done
 
 echo "✗ The bot didn't come online. Last log lines:"
-docker compose logs --tail 30
+dc logs --tail 30
 exit 1
 REMOTE
 
 if [ "$MODE" = "rollback" ]; then
-  green "✓ Rollback complete. Fix the problem, push, and run ./deploy.sh to move forward again."
+  green "✓ Rollback complete. Fix the problem, push, and run ./deploy/deploy.sh to move forward again."
 else
   green "✓ Deploy complete"
 fi

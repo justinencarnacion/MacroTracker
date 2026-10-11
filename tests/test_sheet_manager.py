@@ -2,7 +2,7 @@ import unittest
 
 import gspread
 
-from sheet_manager import get_meals, get_worksheet_for_user, update_meal
+from sheets.sheet_manager import get_meals, get_worksheet_for_user, update_meal
 
 
 class FakeSheet:

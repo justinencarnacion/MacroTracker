@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from user_store import UserStore
+from core.user_store import UserStore
 
 
 class UserStoreTests(unittest.TestCase):

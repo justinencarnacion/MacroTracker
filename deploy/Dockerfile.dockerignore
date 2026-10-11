@@ -1,0 +1,14 @@
+# Build context is the project root; keep secrets and local state out of the image.
+secrets/
+data/
+storage/
+.env
+credentials.json
+oauth_client.json
+.venv/
+.git/
+**/__pycache__/
+**/*.pyc
+.DS_Store
+.deploy-previous
+deploy/deploy.sh

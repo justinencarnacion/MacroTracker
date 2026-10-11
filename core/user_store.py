@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 
 
-DEFAULT_DATABASE = Path(os.getenv("DB_PATH", Path("storage") / "user_data.db"))
+DEFAULT_DATABASE = Path(os.getenv("DB_PATH", Path("data") / "user_data.db"))
 
 # Columns written by _upsert, in INSERT order (discord_id is handled separately).
 COLUMNS = (

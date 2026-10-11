@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import discord
 
-from access import GuildMembershipChecker, RateLimiter
+from bot.access import GuildMembershipChecker, RateLimiter
 
 
 class FakeClock:

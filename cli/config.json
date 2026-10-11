@@ -1,6 +1,6 @@
 {
   "google_sheet_name": "Macro Tracker",
-  "credentials_file": "credentials.json",
+  "credentials_file": "secrets/credentials.json",
   "profiles": {
     "Justin": {
       "daily_limits": {

@@ -2,23 +2,27 @@ import base64
 import json
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import load_dotenv
 
-load_dotenv()
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SECRETS_DIR = PROJECT_ROOT / "secrets"
+
+load_dotenv(SECRETS_DIR / ".env")
 
 
 class SettingsError(RuntimeError):
     pass
 
 
-def load_google_credentials(default_file="credentials.json"):
+def load_google_credentials(default_file=SECRETS_DIR / "credentials.json"):
     """Load the service-account JSON from the environment or a file.
 
     Checked in order: GOOGLE_CREDENTIALS_JSON (raw JSON),
     GOOGLE_CREDENTIALS_B64 (base64-encoded JSON), then the file at
-    GOOGLE_CREDENTIALS_FILE (default: credentials.json).
+    GOOGLE_CREDENTIALS_FILE (default: secrets/credentials.json).
     """
     raw = os.getenv("GOOGLE_CREDENTIALS_JSON")
     if raw:

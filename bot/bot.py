@@ -14,11 +14,11 @@ import discord
 from discord.ext import commands
 from google import genai
 
-from access import GuildMembershipChecker, RateLimiter
-from ai_parser import MACRO_KEYS, ParseError, is_overloaded, parse_input_with_ai
-from settings import Settings, SettingsError
-from sheet_manager import connect_sheets, get_worksheet_for_user
-from user_store import UserStore
+from bot.access import GuildMembershipChecker, RateLimiter
+from bot.ai_parser import MACRO_KEYS, ParseError, is_overloaded, parse_input_with_ai
+from core.settings import Settings, SettingsError
+from sheets.sheet_manager import connect_sheets, get_worksheet_for_user
+from core.user_store import UserStore
 
 logger = logging.getLogger("macrotracker")
 
@@ -47,8 +47,8 @@ def worksheet_title(display_name, discord_id):
     return f"{safe_name[:100 - len(suffix)]}{suffix}"
 
 
-def load_legacy_goals(display_name, config_file="config.json"):
-    """Goals saved in config.json by the CLI, used until the user sets their own."""
+def load_legacy_goals(display_name, config_file="cli/config.json"):
+    """Goals saved in cli/config.json by the CLI, used until the user sets their own."""
     try:
         with open(config_file, "r") as f:
             profiles = json.load(f).get("profiles", {})

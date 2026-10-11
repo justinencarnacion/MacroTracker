@@ -2,7 +2,7 @@ from datetime import datetime
 
 import gspread
 
-from sheet_manager import ensure_headers
+from sheets.sheet_manager import ensure_headers
 
 
 def connect_user_spreadsheet(credentials, user, user_store):

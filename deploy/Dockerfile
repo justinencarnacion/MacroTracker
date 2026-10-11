@@ -16,4 +16,4 @@ COPY . .
 RUN useradd --uid 1000 --create-home app && mkdir -p /data && chown app:app /data
 USER app
 
-CMD ["python", "bot.py"]
+CMD ["python", "-m", "bot.bot"]

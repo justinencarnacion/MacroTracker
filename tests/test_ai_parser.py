@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from google.genai import errors as genai_errors
 
-from ai_parser import ParseError, parse_input_with_ai, validate_ai_response
+from bot.ai_parser import ParseError, parse_input_with_ai, validate_ai_response
 
 
 class FakeModels:
