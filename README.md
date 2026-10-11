@@ -142,7 +142,25 @@ means a weak power supply or poor cooling.
 `sudo nmcli connection modify "$(nmcli -t -f NAME connection show --active | head -1)" 802-11-wireless.powersave 2`
 then reboot.
 
-**Updating:** `git pull && docker compose up -d --build`
+**Updating:** commit and push from your Mac, then run `./deploy.sh` from the
+project folder. It:
+
+1. stops if you're not on `main` or have uncommitted or unpushed changes,
+2. runs the unit tests and stops if any fail,
+3. pulls the new code on the Pi, rebuilds, and restarts the bot,
+4. waits for `Logged in as ...` and reports success, or prints the last log
+   lines if the bot didn't come up.
+
+If a deploy breaks the bot, `./deploy.sh --rollback` puts the Pi back on the
+version it ran before the last deploy. Your Mac and GitHub aren't changed;
+fix the problem, push, and run `./deploy.sh` again to move forward.
+
+`deploy.sh` never copies secrets. When `.env` or `credentials.json` change:
+
+```bash
+scp .env credentials.json macrotracker:~/MacroTracker/
+ssh macrotracker 'cd ~/MacroTracker && docker compose up -d --force-recreate'
+```
 
 **Backups:** meals live in Google Sheets; occasionally copy
 `data/user_data.db` to your Mac with `scp`. SD cards eventually wear out, so

@@ -17,3 +17,6 @@ storage/
 *.sqlite3
 # Local bot data when running with Docker
 data/
+
+# Written on the Pi by deploy.sh for --rollback
+.deploy-previous
