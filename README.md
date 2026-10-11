@@ -18,7 +18,7 @@ MacroTracker/
 ├── cli/        Original terminal tracker and its config.json profiles
 ├── oauth/      Per-user Google OAuth (not used yet; future feature)
 ├── deploy/     Dockerfile, docker-compose.yml, deploy.sh  → deploy/README.md
-├── pi/         Raspberry Pi setup and maintenance          → pi/README.md
+├── pi/         Raspberry Pi setup, maintenance, remote SSH → pi/README.md, pi/remote-access.md
 ├── secrets/    .env, credentials.json (never committed)    → secrets/README.md
 ├── data/       user_data.db (never committed)
 ├── tests/      Unit tests

@@ -16,6 +16,11 @@ ssh macrotracker          # log in (exit or Ctrl+D to leave)
 If `.local` doesn't resolve, find the Pi's IP in your router's device list.
 If a session freezes, press Enter, then type `~.` to force-close it.
 
+**Away from home:** `ssh macrotracker-remote` reaches the Pi from any network
+through Dynamic DNS and a router port-forward. How it was built, and the
+networking concepts behind it, are in [remote-access.md](remote-access.md).
+To deploy while away: `DEPLOY_HOST=macrotracker-remote ./deploy/deploy.sh`.
+
 ## Health checks
 
 From your Mac:
