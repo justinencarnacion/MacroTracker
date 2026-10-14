@@ -1,7 +1,6 @@
 import asyncio
 from collections import defaultdict
 from datetime import datetime
-import json
 import logging
 import os
 from zoneinfo import ZoneInfo
@@ -16,45 +15,24 @@ from google import genai
 
 from bot.access import GuildMembershipChecker, RateLimiter
 from bot.ai_parser import MACRO_KEYS, ParseError, is_overloaded, parse_input_with_ai
+from bot.commands.summaries import SummaryCommands
+from bot.replies import Replies
 from core.settings import Settings, SettingsError
-from sheets.sheet_manager import connect_sheets, get_worksheet_for_user
 from core.user_store import UserStore
+from sheets.sheet_manager import connect_sheets, get_worksheet_for_user, worksheet_title
+from tracking.service import TrackingService
 
 logger = logging.getLogger("macrotracker")
-
-DEFAULT_LIMITS = {
-    "calories": 2050,
-    "protein": 160,
-    "carbs": 210,
-    "fat": 70,
-}
 
 HELP_TEXT = (
     "👋 I'm your macro tracker. DM me things like:\n"
     "• `2 eggs and toast` or `450 cals, 35p, 40c, 12f` — log a meal\n"
-    "• `change my goals to 2200 cals, 180p` — update daily goals\n"
+    "• `what did I eat today?` or `/today` — today's meals and what's left\n"
+    "• `how's my week?` or `/week` — this week, Monday to Sunday\n"
+    "• `set my goals to 2200 cals, 180p, 220c, 70f` or `/goals set` — daily goals\n"
+    "• `what are my goals?` or `/goals show`\n"
     "• `set my timezone to America/New_York` — so meals land on the right day"
 )
-
-
-def worksheet_title(display_name, discord_id):
-    """Create a readable, unique Google Sheets worksheet title."""
-    safe_name = "".join(
-        character for character in display_name if character not in "[]:*?/\\"
-    ).strip()
-    safe_name = safe_name or "Discord User"
-    suffix = f" ({discord_id[-6:]})"
-    return f"{safe_name[:100 - len(suffix)]}{suffix}"
-
-
-def load_legacy_goals(display_name, config_file="cli/config.json"):
-    """Goals saved in cli/config.json by the CLI, used until the user sets their own."""
-    try:
-        with open(config_file, "r") as f:
-            profiles = json.load(f).get("profiles", {})
-    except (FileNotFoundError, json.JSONDecodeError):
-        return None
-    return profiles.get(display_name, {}).get("daily_limits")
 
 
 def format_macros(values):
@@ -79,6 +57,8 @@ class MacroBot(commands.Bot):
         )
         self.membership = GuildMembershipChecker(self, settings.allowed_guild_id)
         self._user_locks = defaultdict(asyncio.Lock)
+        self.tracking = None
+        self.replies = None
 
     async def setup_hook(self):
         self.spreadsheet = await asyncio.to_thread(
@@ -88,6 +68,16 @@ class MacroBot(commands.Bot):
             self.settings.sheet_id,
         )
         logger.info("Connected to spreadsheet '%s'", self.spreadsheet.title)
+        self.tracking = TrackingService(self.spreadsheet, self.settings.default_timezone)
+        self.replies = Replies(self.tracking, self.user_store)
+
+        await self.add_cog(SummaryCommands(self))
+        try:
+            synced = await self.tree.sync()
+            logger.info("Synced %d slash commands: %s", len(synced),
+                        ", ".join(f"/{command.name}" for command in synced))
+        except discord.HTTPException:
+            logger.exception("Could not sync slash commands; DMs still work")
 
     async def on_ready(self):
         logger.info("Logged in as %s; MacroTracker bot is online.", self.user)
@@ -107,29 +97,38 @@ class MacroBot(commands.Bot):
 
         user_id = message.author.id
         try:
-            if not await self.membership.is_allowed(user_id):
-                await message.channel.send(
-                    "🔒 This bot is only available to members of its Discord server."
-                )
-                return
-            if not self.rate_limiter.allow(user_id):
-                await message.channel.send(
-                    "⏳ You're sending messages too quickly. Please wait a minute."
-                )
+            refusal = await self.access_refusal(user_id)
+            if refusal:
+                await message.channel.send(refusal)
                 return
 
-            async with self._user_locks[user_id], message.channel.typing():
+            async with self.user_lock(user_id), message.channel.typing():
                 reply = await self.handle_dm(message)
-        except ParseError as error:
-            reply = f"🤔 {error}\n\n{HELP_TEXT}"
         except Exception as error:
-            if is_overloaded(error):
-                logger.warning("All Gemini models unavailable for %s: %s", user_id, error)
-                reply = "⏳ The AI service is busy right now. Please try again in a minute."
-            else:
-                logger.exception("Failed to process Discord message for %s", user_id)
-                reply = "❌ I could not process that message. Please try again."
+            reply = self.error_reply(error, user_id)
         await message.channel.send(reply)
+
+    async def access_refusal(self, user_id):
+        """A refusal message if the user may not use the bot right now, else None."""
+        if not await self.membership.is_allowed(user_id):
+            return "🔒 This bot is only available to members of its Discord server."
+        if not self.rate_limiter.allow(user_id):
+            return "⏳ You're sending messages too quickly. Please wait a minute."
+        return None
+
+    def user_lock(self, user_id):
+        """Serializes one user's requests so two quick messages can't race."""
+        return self._user_locks[user_id]
+
+    def error_reply(self, error, user_id):
+        """The user-facing message for an error while handling a request."""
+        if isinstance(error, ParseError):
+            return f"🤔 {error}\n\n{HELP_TEXT}"
+        if is_overloaded(error):
+            logger.warning("All Gemini models unavailable for %s: %s", user_id, error)
+            return "⏳ The AI service is busy right now. Please try again in a minute."
+        logger.exception("Failed to process request for %s", user_id, exc_info=error)
+        return "❌ I could not process that message. Please try again."
 
     async def handle_dm(self, message):
         discord_id = str(message.author.id)
@@ -142,9 +141,16 @@ class MacroBot(commands.Bot):
         )
 
         if parsed.intent == "UPDATE_GOALS":
-            goals = {**self.goals_for(user), **parsed.macros}
-            await asyncio.to_thread(self.user_store.set_goals, discord_id, goals)
-            return f"🎯 **Updated daily goals for {display_name}!**\n{format_macros(goals)}"
+            return await self.replies.set_goals(user, parsed.macros)
+
+        if parsed.intent == "SHOW_TODAY":
+            return await self.replies.today(user)
+
+        if parsed.intent == "SHOW_WEEK":
+            return await self.replies.week(user)
+
+        if parsed.intent == "SHOW_GOALS":
+            return await self.replies.goals(user)
 
         if parsed.intent == "SET_TIMEZONE":
             await asyncio.to_thread(
@@ -165,17 +171,13 @@ class MacroBot(commands.Bot):
         await asyncio.to_thread(self._append_meal, user, values)
 
         source = "AI Estimated" if parsed.is_estimation else "Manual Input"
-        return (
+        logged = (
             f"✅ **Logged to your Google Sheet tab!** ({source})\n"
             f"**Meal:** {parsed.meal_name}\n{format_macros(parsed.macros)}"
         )
-
-    def goals_for(self, user):
-        return dict(
-            user["goals"]
-            or load_legacy_goals(user["display_name"])
-            or DEFAULT_LIMITS
-        )
+        user = await asyncio.to_thread(self.user_store.get, discord_id)
+        left_today = await self.replies.left_today(user)
+        return f"{logged}\n{left_today}" if left_today else logged
 
     def _append_meal(self, user, values):
         """Blocking Sheets work; always call through asyncio.to_thread."""

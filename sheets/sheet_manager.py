@@ -25,6 +25,16 @@ def connect_sheets(credentials_info, sheet_name, sheet_id=None):
         ) from error
 
 
+def worksheet_title(display_name, discord_id):
+    """Create a readable, unique Google Sheets worksheet title."""
+    safe_name = "".join(
+        character for character in display_name if character not in "[]:*?/\\"
+    ).strip()
+    safe_name = safe_name or "Discord User"
+    suffix = f" ({discord_id[-6:]})"
+    return f"{safe_name[:100 - len(suffix)]}{suffix}"
+
+
 def get_or_create_worksheet(spreadsheet, profile_name):
     try:
         sheet = spreadsheet.worksheet(profile_name)
@@ -51,6 +61,22 @@ def get_worksheet_for_user(spreadsheet, worksheet_id, title):
         except gspread.exceptions.WorksheetNotFound:
             logger.warning("Worksheet %s not found; recreating '%s'", worksheet_id, title)
     return get_or_create_worksheet(spreadsheet, title)
+
+
+def find_worksheet_for_user(spreadsheet, worksheet_id, title):
+    """Like get_worksheet_for_user, but returns None instead of creating a tab.
+
+    Used for read-only requests, so viewing a summary never creates an empty tab.
+    """
+    if worksheet_id is not None:
+        try:
+            return spreadsheet.get_worksheet_by_id(int(worksheet_id))
+        except gspread.exceptions.WorksheetNotFound:
+            pass
+    try:
+        return spreadsheet.worksheet(title)
+    except gspread.exceptions.WorksheetNotFound:
+        return None
 
 
 def ensure_headers(sheet):

@@ -64,6 +64,11 @@ class ValidateAiResponseTests(unittest.TestCase):
         with self.assertRaises(ParseError):
             parse(intent="SET_TIMEZONE", timezone="Mars/Olympus")
 
+    def test_summary_intents(self):
+        for intent in ("SHOW_TODAY", "SHOW_WEEK", "SHOW_GOALS"):
+            self.assertEqual(parse(intent=intent, calories=None).intent, intent)
+        self.assertEqual(parse(intent="show_today").intent, "SHOW_TODAY")
+
     def test_unknown_intent_and_bad_json(self):
         self.assertEqual(parse(intent="CHITCHAT").intent, "OTHER")
         with self.assertRaises(ParseError):

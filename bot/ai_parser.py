@@ -6,13 +6,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from google.genai import errors as genai_errors
 from google.genai import types
 
+from core.macros import GOAL_LIMITS, MACRO_KEYS, MEAL_LIMITS
+
 logger = logging.getLogger(__name__)
 
-MACRO_KEYS = ("calories", "protein", "carbs", "fat")
-
-# Upper bounds that catch obvious AI mistakes (e.g. 20000 kcal for a sandwich).
-MEAL_LIMITS = {"calories": 10000, "protein": 1000, "carbs": 1500, "fat": 1000}
-GOAL_LIMITS = {"calories": 20000, "protein": 2000, "carbs": 3000, "fat": 2000}
+SUMMARY_INTENTS = ("SHOW_TODAY", "SHOW_WEEK", "SHOW_GOALS")
 
 SYSTEM_PROMPT = """
 You are an expert nutrition assistant. Analyze the user's message.
@@ -20,11 +18,15 @@ Determine if they want to:
 1. "LOG_MEAL": Log food or manual macros (e.g. "2 eggs and toast" or "150 cals, 35p").
 2. "UPDATE_GOALS": Update their daily goal limits (e.g. "change my goals to 2200 cals, 180p, 200c, 70f").
 3. "SET_TIMEZONE": Set their timezone (e.g. "I'm in New York", "set my timezone to PST").
-4. "OTHER": Anything else (greetings, questions, unclear messages).
+4. "SHOW_TODAY": See what they ate today or what they have left today
+   (e.g. "what did I eat today?", "how many macros do I have left?").
+5. "SHOW_WEEK": See their progress this week (e.g. "how's my week going?", "weekly summary").
+6. "SHOW_GOALS": See their current goals (e.g. "what are my goals?").
+7. "OTHER": Anything else (greetings, questions, unclear messages).
 
 Return a JSON object with this EXACT structure:
 {
-  "intent": "LOG_MEAL" | "UPDATE_GOALS" | "SET_TIMEZONE" | "OTHER",
+  "intent": "LOG_MEAL" | "UPDATE_GOALS" | "SET_TIMEZONE" | "SHOW_TODAY" | "SHOW_WEEK" | "SHOW_GOALS" | "OTHER",
   "meal_name": "Short descriptive title" (LOG_MEAL only),
   "calories": number or null,
   "protein": number or null,
@@ -38,7 +40,7 @@ without numbers, estimate them from typical portion sizes and set
 "is_estimation" to true. If they give numbers, use them exactly, set any
 macro they left out to null, and set "is_estimation" to false.
 For UPDATE_GOALS, set any goal the user did not mention to null.
-For SET_TIMEZONE and OTHER, set the macros to null.
+For SET_TIMEZONE, SHOW_TODAY, SHOW_WEEK, SHOW_GOALS, and OTHER, set the macros to null.
 """
 
 
@@ -145,6 +147,9 @@ def validate_ai_response(raw_text):
                 "America/New_York or Europe/London."
             )
         return ParsedMessage(intent=intent, timezone=timezone)
+
+    if intent in SUMMARY_INTENTS:
+        return ParsedMessage(intent=intent)
 
     return ParsedMessage(intent="OTHER")
 

@@ -2,7 +2,13 @@ import unittest
 
 import gspread
 
-from sheets.sheet_manager import get_meals, get_worksheet_for_user, update_meal
+from sheets.sheet_manager import (
+    find_worksheet_for_user,
+    get_meals,
+    get_worksheet_for_user,
+    update_meal,
+    worksheet_title,
+)
 
 
 class FakeSheet:
@@ -57,6 +63,22 @@ class GetWorksheetForUserTests(unittest.TestCase):
         self.assertIs(get_worksheet_for_user(spreadsheet, None, "Alex (123456)"), sheet)
         get_worksheet_for_user(spreadsheet, 999, "Sam (654321)")
         self.assertEqual(spreadsheet.created, ["Sam (654321)"])
+
+
+class FindWorksheetTests(unittest.TestCase):
+    def test_finds_by_id_or_title_without_creating(self):
+        sheet = FakeSheet(sheet_id=5)
+        spreadsheet = FakeSpreadsheet({"Alex (123456)": sheet})
+        self.assertIs(find_worksheet_for_user(spreadsheet, 5, "Renamed (123456)"), sheet)
+        self.assertIs(find_worksheet_for_user(spreadsheet, None, "Alex (123456)"), sheet)
+        self.assertIsNone(find_worksheet_for_user(spreadsheet, 999, "Sam (654321)"))
+        self.assertEqual(spreadsheet.created, [])
+
+
+class WorksheetTitleTests(unittest.TestCase):
+    def test_strips_forbidden_characters_and_adds_id_suffix(self):
+        self.assertEqual(worksheet_title("A/B:C?", "111222333444123456"), "ABC (123456)")
+        self.assertEqual(worksheet_title("  ", "111222333444123456"), "Discord User (123456)")
 
 
 class MealTests(unittest.TestCase):
