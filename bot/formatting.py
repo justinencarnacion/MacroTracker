@@ -67,35 +67,35 @@ def _fit(text):
     return text[: DISCORD_LIMIT - 2] + "…"
 
 
-def format_day(summary):
-    header = f"📅 **Today · {summary.day.strftime('%a, %b')} {summary.day.day}**"
-    progress = (
-        "\n\n**Progress**\n"
-        f"{progress_block(summary.totals, summary.goals, summary.remaining)}"
-    )
-    if not summary.meals:
-        return _fit(f"{header}\nNothing logged yet today.{progress}")
+def day_title(day):
+    return f"📅 Today · {day.strftime('%a, %b')} {day.day}"
 
-    # List as many meals as fit, always leaving room for the progress section.
-    budget = DISCORD_LIMIT - len(header) - len(progress) - len("\n…and 999 more") - 1
+
+def week_title(summary):
+    start, end = summary.start, summary.end
+    return (f"📊 This week · {start.strftime('%a %b')} {start.day} – "
+            f"{end.strftime('%a %b')} {end.day}")
+
+
+def numbered_meals(meals, budget):
+    """Numbered meal lines that fit in `budget` characters, with '…and N more'."""
+    if not meals:
+        return "Nothing logged yet today."
+    budget -= len("\n…and 999 more")
     lines = []
-    for number, meal in enumerate(summary.meals[:MAX_LISTED_MEALS], start=1):
+    for number, meal in enumerate(meals[:MAX_LISTED_MEALS], start=1):
         line = meal_line(number, meal)
         if sum(len(existing) + 1 for existing in lines) + len(line) + 1 > budget:
             break
         lines.append(line)
-    hidden = len(summary.meals) - len(lines)
+    hidden = len(meals) - len(lines)
     if hidden:
         lines.append(f"…and {hidden} more")
-    return _fit(f"{header}\n" + "\n".join(lines) + progress)
+    return "\n".join(lines)
 
 
-def format_week(summary):
-    start, end = summary.start, summary.end
-    header = (
-        f"📊 **This week · {start.strftime('%a %b')} {start.day} – "
-        f"{end.strftime('%a %b')} {end.day}** (day {summary.days_elapsed} of 7)"
-    )
+def week_table(summary):
+    """Monospace Mon-Sun table of kcal / P / C / F, as a code block."""
     rows = [f"{'Day':<7}{'kcal':>7}{'P':>6}{'C':>6}{'F':>6}"]
     for day in summary.days:
         label = f"{day.day.strftime('%a')} {day.day.day:<2}"
@@ -109,10 +109,31 @@ def format_week(summary):
                 f"{label:<7}{amount(totals['calories']):>7}{amount(totals['protein']):>6}"
                 f"{amount(totals['carbs']):>6}{amount(totals['fat']):>6}"
             )
-    days_word = "day" if summary.days_elapsed == 1 else "days"
+    return "```\n" + "\n".join(rows) + "\n```"
+
+
+def days_so_far(summary):
+    word = "day" if summary.days_elapsed == 1 else "days"
+    return f"daily goals × {summary.days_elapsed} {word}"
+
+
+def format_day(summary):
+    """Text-only version of /today (used when a chart can't be drawn)."""
+    header = f"**{day_title(summary.day)}**"
+    progress = (
+        "\n\n**Progress**\n"
+        f"{progress_block(summary.totals, summary.goals, summary.remaining)}"
+    )
+    budget = DISCORD_LIMIT - len(header) - len(progress) - 1
+    return _fit(f"{header}\n{numbered_meals(summary.meals, budget)}{progress}")
+
+
+def format_week(summary):
+    """Text-only version of /week (used when a chart can't be drawn)."""
+    header = f"**{week_title(summary)}** (day {summary.days_elapsed} of 7)"
     return _fit(
-        f"{header}\n```\n" + "\n".join(rows) + "\n```\n"
-        f"**Week so far** (daily goals × {summary.days_elapsed} {days_word})\n"
+        f"{header}\n{week_table(summary)}\n"
+        f"**Week so far** ({days_so_far(summary)})\n"
         f"{progress_block(summary.totals, summary.target, summary.remaining)}\n"
         f"**Daily average:** {macro_line(summary.daily_average)}"
     )

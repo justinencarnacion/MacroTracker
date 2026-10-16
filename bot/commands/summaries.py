@@ -7,6 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from bot.replies import Reply
 from core.macros import GOAL_LIMITS
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,9 @@ class SummaryCommands(commands.Cog):
                     reply = await build_reply(user)
         except Exception as error:
             reply = self.bot.error_reply(error, user_id)
-        await interaction.followup.send(reply, ephemeral=private)
+        await interaction.followup.send(
+            **Reply.of(reply).send_kwargs(self.bot.summary_view), ephemeral=private
+        )
 
     @app_commands.command(name="today", description="What you've eaten today and what's left")
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=False)

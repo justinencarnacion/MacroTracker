@@ -16,7 +16,8 @@ from google import genai
 from bot.access import GuildMembershipChecker, RateLimiter
 from bot.ai_parser import MACRO_KEYS, ParseError, is_overloaded, parse_input_with_ai
 from bot.commands.summaries import SummaryCommands
-from bot.replies import Replies
+from bot.replies import Replies, Reply
+from bot.views.summary import SummaryView
 from core.settings import Settings, SettingsError
 from core.user_store import UserStore
 from sheets.sheet_manager import connect_sheets, get_worksheet_for_user, worksheet_title
@@ -72,6 +73,7 @@ class MacroBot(commands.Bot):
         self.replies = Replies(self.tracking, self.user_store)
 
         await self.add_cog(SummaryCommands(self))
+        self.add_view(SummaryView(self))  # keeps [Today] [Week] buttons working after restarts
         try:
             synced = await self.tree.sync()
             logger.info("Synced %d slash commands: %s", len(synced),
@@ -106,7 +108,30 @@ class MacroBot(commands.Bot):
                 reply = await self.handle_dm(message)
         except Exception as error:
             reply = self.error_reply(error, user_id)
-        await message.channel.send(reply)
+        await message.channel.send(**Reply.of(reply).send_kwargs(self.summary_view))
+
+    def summary_view(self, current):
+        return SummaryView(self, current=current)
+
+    async def switch_summary(self, interaction, kind):
+        """[Today] / [Week] button: redraw the card in place with the presser's data."""
+        await interaction.response.defer()
+        user_id = interaction.user.id
+        try:
+            refusal = await self.access_refusal(user_id)
+            if refusal:
+                await interaction.followup.send(refusal, ephemeral=True)
+                return
+            user = await asyncio.to_thread(
+                self.user_store.ensure_user, str(user_id),
+                interaction.user.display_name.strip(),
+            )
+            build = self.replies.today if kind == "today" else self.replies.week
+            async with self.user_lock(user_id):
+                reply = Reply.of(await build(user))
+            await interaction.edit_original_response(**reply.edit_kwargs(self.summary_view))
+        except Exception as error:
+            await interaction.followup.send(self.error_reply(error, user_id), ephemeral=True)
 
     async def access_refusal(self, user_id):
         """A refusal message if the user may not use the bot right now, else None."""
@@ -172,7 +197,7 @@ class MacroBot(commands.Bot):
 
         source = "AI Estimated" if parsed.is_estimation else "Manual Input"
         logged = (
-            f"✅ **Logged to your Google Sheet tab!** ({source})\n"
+            f"✅ **Logged!** ({source})\n"
             f"**Meal:** {parsed.meal_name}\n{format_macros(parsed.macros)}"
         )
         user = await asyncio.to_thread(self.user_store.get, discord_id)

@@ -15,7 +15,9 @@ itself runs 24/7 on a Raspberry Pi (see [pi/](pi/README.md)).
 ```
 MacroTracker/
 ├── bot/        Discord bot: message handling, AI parsing, access control
-│   └── commands/   Slash commands (/today, /week, /goals)
+│   ├── commands/   Slash commands (/today, /week, /goals)
+│   └── views/      Buttons ([Today] [Week])
+├── charts/     Chart images for /today and /week (logic only, no Discord)
 ├── tracking/   Goals, daily and weekly summaries (logic only, no Discord)
 ├── sheets/     Google Sheets reading and writing
 ├── core/       Shared settings (.env loading), macro definitions, SQLite user store
@@ -32,8 +34,10 @@ MacroTracker/
 | Folder | Files | Purpose |
 | --- | --- | --- |
 | `bot/` | `bot.py`, `ai_parser.py`, `access.py` | Entry point and DM routing, Gemini prompt and validation, server-membership check and rate limit |
-| `bot/` | `replies.py`, `formatting.py` | Builds summary and goal replies (shared by DMs and slash commands); renders progress bars and tables |
+| `bot/` | `replies.py`, `embeds.py`, `formatting.py` | Builds replies (shared by DMs, slash commands, and buttons); embed cards; text formatting and the text-only fallback |
 | `bot/commands/` | `summaries.py` | `/today`, `/week`, `/goals show`, `/goals set` |
+| `bot/views/` | `summary.py` | Persistent `[Today]` `[Week]` buttons under summary cards |
+| `charts/` | `theme.py`, `today.py`, `week.py` | Draws PNG charts with matplotlib in Discord's dark-theme colors |
 | `tracking/` | `goals.py`, `summaries.py`, `service.py` | Goal rules, Monday–Sunday and daily calculations, reading a user's meals in their timezone |
 | `sheets/` | `sheet_manager.py`, `spreadsheet_manager.py` | Connecting to the sheet, per-user tabs, reading and editing meals |
 | `core/` | `settings.py`, `macros.py`, `user_store.py` | Loads `secrets/.env`; macro names and limits; stores goals, timezones and tab IDs in `data/user_data.db` |
@@ -47,12 +51,16 @@ Run everything from the project root.
 | DM message | Slash command | Action |
 | --- | --- | --- |
 | `chicken burrito bowl` / `450 cals, 35p` | — | Logs a meal (AI-estimated or manual), then shows what's left today |
-| `what did I eat today?` / `how many macros do I have left?` | `/today` | Today's meals (numbered), totals, progress bars, remaining |
-| `how's my week going?` | `/week` | Monday–Sunday table plus the week so far vs goals × days elapsed |
+| `what did I eat today?` / `how many macros do I have left?` | `/today` | A card with today's numbered meals, totals vs goals, and a macro progress-bar chart |
+| `how's my week going?` | `/week` | A card with a Monday–Sunday calorie chart against your goal, a per-day table, and the week so far vs goals × days elapsed |
 | `what are my goals?` | `/goals show` | Current daily goals |
 | `set my goals to 2200 cals, 180p, 220c, 70f` | `/goals set` | Sets goals; the first time needs all four, later any subset |
 | `set my timezone to America/New_York` | — | Meals and "today" use your local time |
 | anything else | — | Replies with help |
+
+Summary cards have `[Today]` and `[Week]` buttons that redraw the card in
+place; they keep working after the bot restarts. Users never need to open the
+Google Sheet, which remains the bot's storage behind the scenes.
 
 Progress features require personally set goals; until then the bot asks the
 user to set them. Slash commands work in the bot's DMs and in server channels;
@@ -211,6 +219,21 @@ hosted web callback before they can work on a server.
   mirrored on the Mac as `secrets/.env.prod`
 - Updated `secrets/README.md` and `deploy/README.md` with the split and the
   command for updating the Pi's settings
+
+### Milestone 8: Charts inside Discord (2026-10-16)
+
+- `/today` and `/week` (and their plain-English versions) now reply with
+  embed cards containing chart images, so users never need the Google Sheet
+- Today: a progress bar per macro toward the goal (blurple in progress, green
+  on target, red when over; protein counts as a minimum)
+- Week: Monday–Sunday calorie bars against a dashed goal line; today
+  highlighted, unlogged days shown as faint placeholders, future days blank
+- `[Today]` `[Week]` buttons redraw the card in place and survive restarts
+- Charts are drawn with code (matplotlib) on the Pi, not AI, so they cost no
+  AI requests; if a chart fails, the text summary is sent instead
+- Meal-log replies now say "✅ Logged!" instead of mentioning the Google Sheet
+- New `charts/` package, `bot/embeds.py`, and `bot/views/`; Docker image grows
+  to about 512 MB (matplotlib)
 
 **Next:** edit and delete meals from Discord (numbered list, then Yes/No
 confirmation, with a check that the sheet row hasn't moved).

@@ -1,12 +1,60 @@
-"""Reply text for summary and goal requests, shared by DMs and slash commands."""
+"""Reply content for summary and goal requests, shared by DMs, slash commands, and buttons."""
 
 import asyncio
+import io
 import logging
+from dataclasses import dataclass
 
-from bot import formatting
+import discord
+
+from bot import embeds, formatting
+from charts.today import render_today
+from charts.week import render_week
 from tracking.goals import GoalsIncomplete, has_goals, merge_goals
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class Reply:
+    """What to send: text, an embed card, an attached chart image, and which
+    summary buttons to show ("today" / "week", or None for no buttons)."""
+
+    content: str | None = None
+    embed: discord.Embed | None = None
+    image: bytes | None = None
+    image_name: str | None = None
+    buttons: str | None = None
+
+    @classmethod
+    def of(cls, value):
+        return value if isinstance(value, cls) else cls(content=value)
+
+    def file(self):
+        if self.image is None:
+            return None
+        return discord.File(io.BytesIO(self.image), filename=self.image_name)
+
+    def send_kwargs(self, make_view):
+        """Keyword arguments for channel.send / followup.send. Discord files are
+        single-use, so a fresh File is created on every call."""
+        kwargs = {
+            "content": self.content,
+            "embed": self.embed,
+            "file": self.file(),
+            "view": make_view(self.buttons) if self.buttons else None,
+        }
+        return {key: value for key, value in kwargs.items() if value is not None}
+
+    def edit_kwargs(self, make_view):
+        """Keyword arguments for editing an existing message in place."""
+        file = self.file()
+        return {
+            "content": self.content,
+            "embed": self.embed,
+            "attachments": [file] if file else [],
+            "view": make_view(self.buttons) if self.buttons else None,
+        }
 
 
 class Replies:
@@ -16,15 +64,27 @@ class Replies:
 
     async def today(self, user):
         if not has_goals(user["goals"]):
-            return formatting.NEEDS_GOALS_TEXT
+            return Reply(content=formatting.NEEDS_GOALS_TEXT)
         summary = await asyncio.to_thread(self.tracking.day_summary, user, user["goals"])
-        return formatting.format_day(summary)
+        try:
+            image = await asyncio.to_thread(render_today, summary)
+        except Exception:
+            logger.exception("Could not draw today's chart; sending text instead")
+            return Reply(content=formatting.format_day(summary), buttons="today")
+        return Reply(embed=embeds.today_embed(summary), image=image,
+                     image_name=embeds.TODAY_IMAGE, buttons="today")
 
     async def week(self, user):
         if not has_goals(user["goals"]):
-            return formatting.NEEDS_GOALS_TEXT
+            return Reply(content=formatting.NEEDS_GOALS_TEXT)
         summary = await asyncio.to_thread(self.tracking.week_summary, user, user["goals"])
-        return formatting.format_week(summary)
+        try:
+            image = await asyncio.to_thread(render_week, summary)
+        except Exception:
+            logger.exception("Could not draw this week's chart; sending text instead")
+            return Reply(content=formatting.format_week(summary), buttons="week")
+        return Reply(embed=embeds.week_embed(summary), image=image,
+                     image_name=embeds.WEEK_IMAGE, buttons="week")
 
     async def goals(self, user):
         if not has_goals(user["goals"]):
