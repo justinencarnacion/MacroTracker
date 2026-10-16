@@ -200,5 +200,17 @@ hosted web callback before they can work on a server.
   commands; summaries are read live from the sheet
 - The bot no longer falls back to `cli/config.json` or built-in default goals
 
+### Milestone 7: Separate test and production API keys (2026-10-16)
+
+- No code changes
+- Created separate **test** and **production** Gemini API keys in separate
+  Google Cloud projects, so new versions of MacroTracker can be tested without
+  using the limited daily requests real users depend on (the bot runs on
+  Gemini's free tier, which caps requests per model per day)
+- The Mac's `secrets/.env` uses the test key; the Pi uses the production key,
+  mirrored on the Mac as `secrets/.env.prod`
+- Updated `secrets/README.md` and `deploy/README.md` with the split and the
+  command for updating the Pi's settings
+
 **Next:** edit and delete meals from Discord (numbered list, then Yes/No
 confirmation, with a check that the sheet row hasn't moved).

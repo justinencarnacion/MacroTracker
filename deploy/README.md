@@ -42,13 +42,26 @@ forward.
 
 ## Updating secrets
 
-`deploy.sh` never copies secrets. When `secrets/.env` or
-`secrets/credentials.json` change:
+`deploy.sh` never copies secrets. The Pi's settings come from the Mac's
+`secrets/.env.prod` (production key), **not** `secrets/.env` (test key); see
+[../secrets/README.md](../secrets/README.md#test-and-production-keys).
+
+After editing `secrets/.env.prod`:
 
 ```bash
-scp secrets/.env secrets/credentials.json macrotracker:~/MacroTracker/secrets/
+scp secrets/.env.prod macrotracker:~/MacroTracker/secrets/.env
 ssh macrotracker 'cd ~/MacroTracker/deploy && docker compose up -d --force-recreate'
 ```
+
+After replacing `secrets/credentials.json`:
+
+```bash
+scp secrets/credentials.json macrotracker:~/MacroTracker/secrets/
+ssh macrotracker 'cd ~/MacroTracker/deploy && docker compose up -d --force-recreate'
+```
+
+The `--force-recreate` restart (about 5-10 seconds of downtime) is needed
+because the bot reads its settings only when the container starts.
 
 ## Running Docker commands
 
