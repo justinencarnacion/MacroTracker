@@ -72,6 +72,17 @@ class WeekFormatTests(unittest.TestCase):
         self.assertIn("4,200 kcal left", text)
 
 
+class WeekTableTests(unittest.TestCase):
+    def test_rows_fit_on_phones(self):
+        summary = summarize_week(
+            [meal("2026-10-12 12:00", calories=12345, protein=999, carbs=999, fat=999)],
+            date(2026, 10, 14), GOALS,
+        )
+        rows = formatting.week_table(summary).strip("`\n").split("\n")
+        self.assertEqual(len(rows), 8)  # header + Mon..Sun
+        self.assertTrue(all(len(row) <= formatting.WEEK_TABLE_WIDTH for row in rows), rows)
+
+
 class GoalsFormatTests(unittest.TestCase):
     def test_goals(self):
         text = formatting.format_goals(GOALS)

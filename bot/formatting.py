@@ -94,20 +94,27 @@ def numbered_meals(meals, budget):
     return "\n".join(lines)
 
 
+WEEK_TABLE_WIDTH = 24  # narrow enough not to wrap inside an embed on phones
+
+
 def week_table(summary):
-    """Monospace Mon-Sun table of kcal / P / C / F, as a code block."""
-    rows = [f"{'Day':<7}{'kcal':>7}{'P':>6}{'C':>6}{'F':>6}"]
+    """Monospace Mon-Sun table of kcal / P / C / F, as a code block.
+
+    Rows are at most WEEK_TABLE_WIDTH characters: wider rows wrap on phones,
+    pushing the last column onto its own line.
+    """
+    rows = [f"{'Day':<6}{'kcal':>6}{'P':>4}{'C':>4}{'F':>4}"]
     for day in summary.days:
-        label = f"{day.day.strftime('%a')} {day.day.day:<2}"
+        label = f"{day.day.strftime('%a')} {day.day.day}"
         if day.is_future:
-            rows.append(f"{label:<7}{'·':>7}")
+            rows.append(f"{label:<6}{'·':>6}")
         elif day.meal_count == 0:
-            rows.append(f"{label:<7}{'—':>7}")
+            rows.append(f"{label:<6}{'—':>6}")
         else:
             totals = day.totals
             rows.append(
-                f"{label:<7}{amount(totals['calories']):>7}{amount(totals['protein']):>6}"
-                f"{amount(totals['carbs']):>6}{amount(totals['fat']):>6}"
+                f"{label:<6}{amount(totals['calories']):>6}{round(totals['protein']):>4}"
+                f"{round(totals['carbs']):>4}{round(totals['fat']):>4}"
             )
     return "```\n" + "\n".join(rows) + "\n```"
 
