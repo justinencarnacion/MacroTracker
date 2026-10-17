@@ -146,14 +146,8 @@ def update_meal(sheet, row_number, meal_name, calories, protein, carbs, fat):
     if row_number < 2:
         raise ValueError("Meal row number must be at least 2.")
     sheet.update(
-        f"B{row_number}:F{row_number}",
-        [[
-            meal_name,
-            calories,
-            protein,
-            carbs,
-            fat,
-        ]],
+        values=[[meal_name, calories, protein, carbs, fat]],
+        range_name=f"B{row_number}:F{row_number}",
     )
 
 

@@ -1,5 +1,7 @@
 """Turns tracking summaries into Discord message text. No I/O."""
 
+from datetime import datetime
+
 from core.macros import MACRO_KEYS, MACRO_LABELS, MACRO_TAGS
 
 DISCORD_LIMIT = 2000
@@ -59,6 +61,20 @@ def macro_line(values):
 def meal_line(number, meal):
     time = str(meal["date_time"])[11:16]
     return f"{number}. `{time}` {meal['meal_name']} — {macro_line(meal)}"
+
+
+def meal_when(meal):
+    """'Thu Oct 15, 12:30' from a meal's 'YYYY-MM-DD HH:MM' timestamp."""
+    try:
+        moment = datetime.strptime(str(meal["date_time"])[:16], "%Y-%m-%d %H:%M")
+    except ValueError:
+        return str(meal["date_time"])
+    return f"{moment.strftime('%a %b')} {moment.day}, {moment.strftime('%H:%M')}"
+
+
+def meal_summary(meal):
+    """'**Chicken & rice** (Thu Oct 15, 12:30 · 980 kcal · P 56g · C 121g · F 30g)'"""
+    return f"**{meal['meal_name']}** ({meal_when(meal)} · {macro_line(meal)})"
 
 
 def _fit(text):

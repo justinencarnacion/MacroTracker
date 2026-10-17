@@ -15,8 +15,8 @@ itself runs 24/7 on a Raspberry Pi (see [pi/](pi/README.md)).
 ```
 MacroTracker/
 ├── bot/        Discord bot: message handling, AI parsing, access control
-│   ├── commands/   Slash commands (/today, /week, /goals)
-│   └── views/      Buttons ([Today] [Week])
+│   ├── commands/   Slash commands (/today, /week, /goals, /edit, /delete)
+│   └── views/      Buttons, meal picker, edit form, confirmations
 ├── charts/     Chart images for /today and /week (logic only, no Discord)
 ├── tracking/   Goals, daily and weekly summaries (logic only, no Discord)
 ├── sheets/     Google Sheets reading and writing
@@ -35,10 +35,10 @@ MacroTracker/
 | --- | --- | --- |
 | `bot/` | `bot.py`, `ai_parser.py`, `access.py` | Entry point and DM routing, Gemini prompt and validation, server-membership check and rate limit |
 | `bot/` | `replies.py`, `embeds.py`, `formatting.py` | Builds replies (shared by DMs, slash commands, and buttons); embed cards; text formatting and the text-only fallback |
-| `bot/commands/` | `summaries.py` | `/today`, `/week`, `/goals show`, `/goals set` |
-| `bot/views/` | `summary.py` | Persistent `[Today]` `[Week]` buttons under summary cards |
+| `bot/commands/` | `summaries.py`, `meals.py`, `common.py` | `/today`, `/week`, `/goals show`, `/goals set`, `/edit`, `/delete`; shared access checks |
+| `bot/views/` | `summary.py`, `meals.py` | Persistent `[Today]` `[Week]` buttons; meal picker, edit form, and Yes/No confirmation |
 | `charts/` | `theme.py`, `today.py`, `week.py` | Draws PNG charts with matplotlib in Discord's dark-theme colors |
-| `tracking/` | `goals.py`, `summaries.py`, `service.py` | Goal rules, Monday–Sunday and daily calculations, reading a user's meals in their timezone |
+| `tracking/` | `goals.py`, `summaries.py`, `service.py`, `meal_service.py` | Goal rules, Monday–Sunday and daily calculations, reading a user's meals in their timezone, safely editing and deleting meals |
 | `sheets/` | `sheet_manager.py`, `spreadsheet_manager.py` | Connecting to the sheet, per-user tabs, reading and editing meals |
 | `core/` | `settings.py`, `macros.py`, `user_store.py` | Loads `secrets/.env`; macro names and limits; stores goals, timezones and tab IDs in `data/user_data.db` |
 | `cli/` | `main.py`, `display.py`, `config_manager.py`, `config.json` | Interactive terminal tracker |
@@ -55,6 +55,8 @@ Run everything from the project root.
 | `how's my week going?` | `/week` | A card with a Monday–Sunday calorie chart against your goal, a per-day table, and the week so far vs goals × days elapsed |
 | `what are my goals?` | `/goals show` | Current daily goals |
 | `set my goals to 2200 cals, 180p, 220c, 70f` | `/goals set` | Sets goals; the first time needs all four, later any subset |
+| — | `/edit` | Pick a meal from the last 7 days, change it in a form, confirm |
+| — | `/delete` | Pick a meal from the last 7 days and confirm before it's removed |
 | `set my timezone to America/New_York` | — | Meals and "today" use your local time |
 | anything else | — | Replies with help |
 
@@ -235,5 +237,21 @@ hosted web callback before they can work on a server.
 - New `charts/` package, `bot/embeds.py`, and `bot/views/`; Docker image grows
   to about 512 MB (matplotlib)
 
-**Next:** edit and delete meals from Discord (numbered list, then Yes/No
-confirmation, with a check that the sheet row hasn't moved).
+### Milestone 9: Edit and delete meals (2026-10-17)
+
+- `/edit` and `/delete` show a dropdown of the user's meals from the last
+  7 days, newest first
+- Edit opens a form pre-filled with the meal's name, calories, protein,
+  carbs, and fat; the meal keeps its original time. No AI requests are used
+- Nothing changes until the user presses the confirm button; afterwards the
+  bot shows what changed and the refreshed `/today` card
+- Before writing, the bot re-reads the sheet: if rows shifted it finds the
+  meal at its new position; if the meal was changed or is ambiguous, it
+  refuses instead of touching the wrong row
+- Only the person who ran the command can use its menu and buttons
+- Fixed `update_meal` to pass values to gspread 6 by name
+- Plain-English edit/delete ("delete my last meal") is deferred until the
+  project has a larger AI request budget
+
+**Next:** zero-AI logging to stretch the free AI quota (number-only meals,
+a `/log` command, saved meals).

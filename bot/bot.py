@@ -15,12 +15,15 @@ from google import genai
 
 from bot.access import GuildMembershipChecker, RateLimiter
 from bot.ai_parser import MACRO_KEYS, ParseError, is_overloaded, parse_input_with_ai
+from bot.commands.meals import MealCommands
 from bot.commands.summaries import SummaryCommands
 from bot.replies import Replies, Reply
+from bot.views.meals import changes, describe_ref
 from bot.views.summary import SummaryView
 from core.settings import Settings, SettingsError
 from core.user_store import UserStore
 from sheets.sheet_manager import connect_sheets, get_worksheet_for_user, worksheet_title
+from tracking.meal_service import MealChanged, MealService
 from tracking.service import TrackingService
 
 logger = logging.getLogger("macrotracker")
@@ -32,6 +35,7 @@ HELP_TEXT = (
     "• `how's my week?` or `/week` — this week, Monday to Sunday\n"
     "• `set my goals to 2200 cals, 180p, 220c, 70f` or `/goals set` — daily goals\n"
     "• `what are my goals?` or `/goals show`\n"
+    "• `/edit` or `/delete` — fix a meal from the last 7 days\n"
     "• `set my timezone to America/New_York` — so meals land on the right day"
 )
 
@@ -60,6 +64,7 @@ class MacroBot(commands.Bot):
         self._user_locks = defaultdict(asyncio.Lock)
         self.tracking = None
         self.replies = None
+        self.meals = None
 
     async def setup_hook(self):
         self.spreadsheet = await asyncio.to_thread(
@@ -71,8 +76,10 @@ class MacroBot(commands.Bot):
         logger.info("Connected to spreadsheet '%s'", self.spreadsheet.title)
         self.tracking = TrackingService(self.spreadsheet, self.settings.default_timezone)
         self.replies = Replies(self.tracking, self.user_store)
+        self.meals = MealService(self.spreadsheet, self.tracking)
 
         await self.add_cog(SummaryCommands(self))
+        await self.add_cog(MealCommands(self))
         self.add_view(SummaryView(self))  # keeps [Today] [Week] buttons working after restarts
         try:
             synced = await self.tree.sync()
@@ -130,6 +137,37 @@ class MacroBot(commands.Bot):
             async with self.user_lock(user_id):
                 reply = Reply.of(await build(user))
             await interaction.edit_original_response(**reply.edit_kwargs(self.summary_view))
+        except Exception as error:
+            await interaction.followup.send(self.error_reply(error, user_id), ephemeral=True)
+
+    async def apply_meal_change(self, interaction, action, ref, values=None):
+        """Confirm button for /edit or /delete: write the change, then show the
+        refreshed /today card in place of the confirmation message."""
+        await interaction.response.defer()
+        user_id = interaction.user.id
+        try:
+            refusal = await self.access_refusal(user_id)
+            if refusal:
+                await interaction.followup.send(refusal, ephemeral=True)
+                return
+            user = await asyncio.to_thread(
+                self.user_store.ensure_user, str(user_id),
+                interaction.user.display_name.strip(),
+            )
+            async with self.user_lock(user_id):
+                if action == "delete":
+                    await asyncio.to_thread(self.meals.delete, user, ref)
+                    message = f"🗑️ Deleted {describe_ref(ref)}"
+                else:
+                    await asyncio.to_thread(self.meals.update, user, ref, values)
+                    lines = changes(ref.__dict__, values)
+                    message = f"✏️ Updated **{values['meal_name']}**\n" + "\n".join(
+                        f"• {line}" for line in lines)
+                reply = await self.replies.after_change(user, message)
+            await interaction.edit_original_response(**reply.edit_kwargs(self.summary_view))
+        except MealChanged as error:
+            await interaction.edit_original_response(
+                content=f"⚠️ {error}", embed=None, attachments=[], view=None)
         except Exception as error:
             await interaction.followup.send(self.error_reply(error, user_id), ephemeral=True)
 

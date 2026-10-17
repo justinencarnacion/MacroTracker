@@ -25,6 +25,7 @@ class Reply:
     image: bytes | None = None
     image_name: str | None = None
     buttons: str | None = None
+    view: discord.ui.View | None = None  # a one-off view (e.g. a meal picker); overrides `buttons`
 
     @classmethod
     def of(cls, value):
@@ -35,6 +36,11 @@ class Reply:
             return None
         return discord.File(io.BytesIO(self.image), filename=self.image_name)
 
+    def _view(self, make_view):
+        if self.view is not None:
+            return self.view
+        return make_view(self.buttons) if self.buttons else None
+
     def send_kwargs(self, make_view):
         """Keyword arguments for channel.send / followup.send. Discord files are
         single-use, so a fresh File is created on every call."""
@@ -42,7 +48,7 @@ class Reply:
             "content": self.content,
             "embed": self.embed,
             "file": self.file(),
-            "view": make_view(self.buttons) if self.buttons else None,
+            "view": self._view(make_view),
         }
         return {key: value for key, value in kwargs.items() if value is not None}
 
@@ -53,7 +59,7 @@ class Reply:
             "content": self.content,
             "embed": self.embed,
             "attachments": [file] if file else [],
-            "view": make_view(self.buttons) if self.buttons else None,
+            "view": self._view(make_view),
         }
 
 
@@ -85,6 +91,12 @@ class Replies:
             return Reply(content=formatting.format_week(summary), buttons="week")
         return Reply(embed=embeds.week_embed(summary), image=image,
                      image_name=embeds.WEEK_IMAGE, buttons="week")
+
+    async def after_change(self, user, message):
+        """A confirmation line followed by the refreshed /today card."""
+        reply = Reply.of(await self.today(user))
+        reply.content = f"{message}\n\n{reply.content}" if reply.content else message
+        return reply
 
     async def goals(self, user):
         if not has_goals(user["goals"]):

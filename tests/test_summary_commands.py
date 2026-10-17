@@ -22,5 +22,15 @@ class SummaryCommandsTests(unittest.TestCase):
         self.assertTrue(all(not p.required for p in goals_set.parameters))
 
 
+class MealCommandsTests(unittest.TestCase):
+    def test_registers_edit_and_delete_for_dms_and_servers(self):
+        from bot.commands.meals import MealCommands
+        cog = MealCommands(SimpleNamespace())
+        commands = {command.name: command for command in cog.get_app_commands()}
+        self.assertEqual(sorted(commands), ["delete", "edit"])
+        for command in commands.values():
+            self.assertTrue(command.allowed_contexts.guild and command.allowed_contexts.dm_channel)
+
+
 if __name__ == "__main__":
     unittest.main()

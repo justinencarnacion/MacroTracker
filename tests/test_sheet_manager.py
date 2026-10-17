@@ -16,6 +16,7 @@ class FakeSheet:
         self.id = sheet_id
         self.records = records or []
         self.updates = []
+        self.deleted = []
 
     def row_values(self, row):
         return ["Date/Time"]
@@ -23,8 +24,11 @@ class FakeSheet:
     def get_all_records(self):
         return self.records
 
-    def update(self, cell_range, values):
-        self.updates.append((cell_range, values))
+    def update(self, values=None, range_name=None):
+        self.updates.append((range_name, values))
+
+    def delete_rows(self, row_number):
+        self.deleted.append(row_number)
 
 
 class FakeSpreadsheet:
