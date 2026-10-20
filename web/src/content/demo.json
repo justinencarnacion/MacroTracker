@@ -1,0 +1,57 @@
+{
+  "logged": {
+    "message": "270g chicken thigh with skin and bone, 250g cooked white rice",
+    "reply": "✅ Logged! (AI Estimated)\nMeal: Chicken thigh and white rice\n865 kcal · P 55g · C 92g · F 30g",
+    "leftToday": "📉 Left today: 920 kcal · P 84.5g · C 79g · F 29.7g"
+  },
+  "today": {
+    "title": "📅 Today · Thu, Oct 15",
+    "description": "1. `08:10` Fuji apple — 115 kcal · P 0.5g · C 29g · F 0.3g\n2. `12:40` Chicken thigh and white rice — 865 kcal · P 55g · C 92g · F 30g",
+    "fields": [
+      {
+        "name": "Calories",
+        "value": "980 / 1,900 kcal\n920 kcal left"
+      },
+      {
+        "name": "Protein",
+        "value": "55.5 / 140g\n84.5g left"
+      },
+      {
+        "name": "Carbs",
+        "value": "121 / 200g\n79g left"
+      },
+      {
+        "name": "Fat",
+        "value": "30.3 / 60g\n29.7g left"
+      }
+    ],
+    "image": "today.png"
+  },
+  "week": {
+    "title": "📊 This week · Mon Oct 12 – Sun Oct 18",
+    "description": "Day 4 of 7 · week so far vs daily goals × 4 days\n```\nDay     kcal   P   C   F\nMon 12 1,850 130 190  55\nTue 13 2,300 150 260  80\nWed 14     —\nThu 15   980  56 121  30\nFri 16     ·\nSat 17     ·\nSun 18     ·\n```",
+    "fields": [
+      {
+        "name": "Calories",
+        "value": "5,130 / 7,600 kcal\n2,470 kcal left"
+      },
+      {
+        "name": "Protein",
+        "value": "335.5 / 560g\n224.5g left"
+      },
+      {
+        "name": "Carbs",
+        "value": "571 / 800g\n229g left"
+      },
+      {
+        "name": "Fat",
+        "value": "165.3 / 240g\n74.7g left"
+      },
+      {
+        "name": "Daily average",
+        "value": "1,282.5 kcal · P 83.9g · C 142.8g · F 41.3g"
+      }
+    ],
+    "image": "week.png"
+  }
+}

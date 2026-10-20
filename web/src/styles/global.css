@@ -1,0 +1,81 @@
+/* Design tokens: every color and size used by components comes from here. */
+:root {
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --surface-raised: #eef0f6;
+  --text: #1e1f22;
+  --text-muted: #5c5e66;
+  --border: #dcdee6;
+  --accent: #5865f2; /* Discord blurple, matches the bot's charts */
+  --accent-text: #ffffff;
+  --good: #23a55a;
+  --warn: #f23f43;
+
+  /* The Discord demo always uses Discord's dark theme, like the real app. */
+  --discord-bg: #313338;
+  --discord-embed: #2b2d31;
+  --discord-text: #dbdee1;
+  --discord-muted: #949ba4;
+  --discord-button: #4e5058;
+
+  --radius: 14px;
+  --radius-small: 8px;
+  --content-width: 1080px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111214;
+    --surface: #1a1b1e;
+    --surface-raised: #232428;
+    --text: #f2f3f5;
+    --text-muted: #a3a6ad;
+    --border: #2e3035;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+a {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}

@@ -27,6 +27,7 @@ MacroTracker/
 ├── pi/         Raspberry Pi setup, maintenance, remote SSH → pi/README.md, pi/remote-access.md
 ├── secrets/    .env, credentials.json (never committed)    → secrets/README.md
 ├── data/       user_data.db (never committed)
+├── web/        Website: React + TypeScript (Vite), on GitHub Pages → web/README.md
 ├── tests/      Unit tests
 └── requirements.txt
 ```
@@ -43,6 +44,7 @@ MacroTracker/
 | `core/` | `settings.py`, `macros.py`, `user_store.py` | Loads `secrets/.env`; macro names and limits; stores goals, timezones and tab IDs in `data/user_data.db` |
 | `cli/` | `main.py`, `display.py`, `config_manager.py`, `config.json` | Interactive terminal tracker |
 | `oauth/` | `oauth_manager.py` | Kept for a future version where each user owns a spreadsheet |
+| `web/` | `src/` (React components), `scripts/generate_demo.py` | The project website; its Discord demo is generated from the bot's own chart and embed code |
 
 Run everything from the project root.
 
@@ -252,6 +254,20 @@ hosted web callback before they can work on a server.
 - Fixed `update_meal` to pass values to gspread 6 by name
 - Plain-English edit/delete ("delete my last meal") is deferred until the
   project has a larger AI request budget
+
+### Milestone 10: Project website (2026-10-20)
+
+- New `web/` folder: a React + TypeScript site built with Vite, explaining
+  what MacroTracker is and how it works
+- Pages and home-page sections are typed registries, so adding a section or a
+  page is one component plus one entry
+- An interactive mock Discord conversation shows the bot's real output: the
+  demo's charts and card text are generated from the bot's own code by
+  `web/scripts/generate_demo.py`, and its `[Today]` `[Week]` buttons work
+- Responsive down to phone widths, light and dark themes, keyboard focus
+  styles, and reduced-motion support
+- Published to GitHub Pages by a GitHub Actions workflow whenever `web/`
+  changes on `main`; the bot's Docker image excludes `web/`
 
 **Next:** zero-AI logging to stretch the free AI quota (number-only meals,
 a `/log` command, saved meals).

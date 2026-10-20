@@ -26,3 +26,7 @@ __pycache__/
 
 # Written on the Pi by deploy/deploy.sh for --rollback
 .deploy-previous
+
+# Website build output and dependencies
+web/node_modules/
+web/dist/

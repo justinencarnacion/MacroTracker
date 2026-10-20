@@ -1,0 +1,51 @@
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 20px;
+}
+
+.step {
+  position: relative;
+  padding: 28px 24px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+}
+
+.number {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 800;
+}
+
+.title {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+}
+
+.body {
+  margin: 0 0 18px;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.example {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 6px 10px;
+  border-radius: var(--radius-small);
+  background: var(--surface-raised);
+  color: var(--text);
+}
