@@ -17,6 +17,28 @@ export const site = {
   },
 } as const;
 
+export interface BannerConfig {
+  /** Image file inside web/public/, e.g. "banner/banner.jpg". */
+  src: string;
+  /** Describes the picture for screen readers and if it fails to load. */
+  alt: string;
+  /** Optional text shown over the bottom of the image. */
+  caption?: string;
+  /** If a very tall picture has to be cropped, which part stays visible: "center", "top", "50% 30%"... */
+  focus?: string;
+}
+
+/**
+ * The picture banner under the header. To use your own picture, put it in
+ * web/public/banner/ and change `src`. Set to null to hide the banner.
+ */
+export const banner: BannerConfig | null = {
+  src: "banner/picture.JPG",
+  alt: "My Inspiration for MacroTracker!",
+  //caption: "Log meals in Discord. See your progress in charts.",
+  focus: "center",
+};
+
 export interface Step {
   title: string;
   body: string;

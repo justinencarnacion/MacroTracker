@@ -28,7 +28,7 @@ web/src/
 ├── sections/
 │   ├── registry.ts        The home page's sections, top to bottom
 │   ├── types.ts           The Section type every entry follows
-│   └── Hero, HowItWorks, DiscordDemo (.tsx + .module.css)
+│   └── Banner, Hero, HowItWorks, DiscordDemo (.tsx + .module.css)
 ├── components/            Reusable pieces: SectionShell, ButtonLink, Layout
 │   └── discord/           Mock Discord UI: message, embed, buttons, markdown
 ├── content/
@@ -53,6 +53,26 @@ components.
 2. Add one entry to `src/pages/registry.tsx`:
    `{ path: "/about", title: "About · MacroTracker", element: <SectionPage sections={aboutSections} /> }`.
 3. Link to it with React Router's `<Link to="/about">`.
+
+## Change the banner
+
+The picture banner at the top of the home page is set in `banner` in
+`src/content/site.ts`.
+
+1. Put your picture in `web/public/banner/`, e.g. `banner.jpg`. Wide pictures
+   work best (about 3:1, such as 1600 × 500); JPG or WebP under ~500 KB loads
+   quickly.
+2. In `site.ts`, set `src: "banner/banner.jpg"` and describe the picture in
+   `alt`.
+3. Optional: change or remove `caption` (the text over the picture), or set
+   `focus` (e.g. `"top"`) to choose which part of a very tall picture stays
+   visible.
+4. To hide the banner, set `banner` to `null`. To move it, move its line in
+   `src/sections/registry.ts`.
+
+The banner keeps the picture's own shape, so nothing is cut off on phones; on
+small screens the caption moves below the picture. If the file can't be
+loaded, the banner hides itself instead of showing a broken image.
 
 ## Refresh the demo
 

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="500" viewBox="0 0 1600 500">
+  <!-- Placeholder banner: replace with your own picture (see web/README.md). -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5865f2"/>
+      <stop offset="0.55" stop-color="#3b3f9e"/>
+      <stop offset="1" stop-color="#1e7a4a"/>
+    </linearGradient>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="2" fill="#ffffff" fill-opacity="0.12"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="500" fill="url(#bg)"/>
+  <rect width="1600" height="500" fill="url(#dots)"/>
+  <g fill="#ffffff" fill-opacity="0.18">
+    <rect x="1040" y="150" width="420" height="34" rx="17"/>
+    <rect x="1040" y="210" width="300" height="34" rx="17"/>
+    <rect x="1040" y="270" width="380" height="34" rx="17"/>
+    <rect x="1040" y="330" width="240" height="34" rx="17"/>
+  </g>
+  <g fill="#ffffff" fill-opacity="0.85">
+    <rect x="1040" y="150" width="250" height="34" rx="17"/>
+    <rect x="1040" y="210" width="230" height="34" rx="17"/>
+    <rect x="1040" y="270" width="190" height="34" rx="17"/>
+    <rect x="1040" y="330" width="200" height="34" rx="17"/>
+  </g>
+  <text x="120" y="230" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="84" font-weight="800" fill="#ffffff">MacroTracker</text>
+  <text x="124" y="290" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="30" fill="#ffffff" fill-opacity="0.8">Placeholder banner: add your own picture in web/public/banner/</text>
+</svg>

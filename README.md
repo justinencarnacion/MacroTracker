@@ -269,5 +269,15 @@ hosted web callback before they can work on a server.
 - Published to GitHub Pages by a GitHub Actions workflow whenever `web/`
   changes on `main`; the bot's Docker image excludes `web/`
 
+### Milestone 11: Website picture banner (2026-10-21)
+
+- A picture banner at the top of the website, set in one place
+  (`banner` in `web/src/content/site.ts`): image, description, optional
+  caption, and which part to keep if cropped; set it to `null` to hide it
+- Keeps the picture's shape so nothing is cut off on phones; the caption moves
+  below the picture on small screens; a missing image hides the banner
+  instead of showing a broken one
+- Ships with a placeholder banner until a real picture is added
+
 **Next:** zero-AI logging to stretch the free AI quota (number-only meals,
 a `/log` command, saved meals).

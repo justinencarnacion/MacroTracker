@@ -30,3 +30,4 @@ __pycache__/
 # Website build output and dependencies
 web/node_modules/
 web/dist/
+web/*.tsbuildinfo
