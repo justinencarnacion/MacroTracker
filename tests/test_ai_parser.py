@@ -84,6 +84,13 @@ class ModelFallbackTests(unittest.TestCase):
         self.assertEqual(parsed.macros["calories"], 100)
         self.assertEqual(models.calls, ["a", "b", "c"])
 
+    def test_reports_each_attempt(self):
+        client, _ = fake_client({"a": 503, "b": 429})
+        seen = []
+        asyncio.run(parse_input_with_ai(client, ["a", "b", "c"], "toast",
+                                        on_attempt=lambda model, outcome: seen.append((model, outcome))))
+        self.assertEqual(seen, [("a", "overloaded"), ("b", "rate_limited"), ("c", "ok")])
+
     def test_other_client_errors_do_not_fall_back(self):
         client, models = fake_client({"a": 404})
         with self.assertRaises(genai_errors.ClientError):

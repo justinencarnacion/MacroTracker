@@ -25,6 +25,8 @@ async def respond(bot, interaction, build_reply):
         if refusal:
             reply = refusal
         else:
+            command = interaction.command
+            bot.metrics.incr("command", command.qualified_name if command else "unknown")
             user = await asyncio.to_thread(
                 bot.user_store.ensure_user,
                 str(user_id),

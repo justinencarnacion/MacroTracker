@@ -10,6 +10,7 @@ are in [../pi/README.md](../pi/README.md).
 | `Dockerfile.dockerignore` | Keeps `secrets/`, `data/`, `.git`, and caches out of the image |
 | `docker-compose.yml` | Runs the container: auto-restart, log rotation, mounts `secrets/` and `data/` |
 | `deploy.sh` | One-command deploy from your Mac to the Pi, with tests and rollback |
+| `health.sh` | Health and usage report from your Mac (with `health_collect.py` on the Pi and `health_report.py` on the Mac) |
 
 ## Deploying a change
 
@@ -62,6 +63,34 @@ ssh macrotracker 'cd ~/MacroTracker/deploy && docker compose up -d --force-recre
 
 The `--force-recreate` restart (about 5-10 seconds of downtime) is needed
 because the bot reads its settings only when the container starts.
+
+## Health check
+
+```bash
+./deploy/health.sh
+```
+
+One command from your Mac (home or away; set `HEALTH_HOST` to force a host).
+It reports:
+
+| Section | What it shows |
+| --- | --- |
+| Raspberry Pi | Temperature, power/throttling, CPU load, RAM, swap, SD card space |
+| Bot | Status, crash restarts, memory, CPU, image size, deployed commit vs GitHub, errors in the last 24h |
+| Users | Registered, with goals, with timezone, active in the last 24h and 7 days |
+| Requests | DMs, slash commands, button presses, meals logged/edited/deleted, refused users (24h and 7 days) |
+| AI (Gemini) | Answered vs "all busy" vs unreadable; per-model attempts (ok / overloaded / 429 / error) and free-tier requests used today |
+| Last 7 days | Per-day DMs, commands, meals, AI successes and failures |
+
+Problems are flagged with ⚠️ / ❌ and summarized at the end; the script exits
+with status 1 if anything is critical. Each run appends a row to
+`data/health_history.csv` on your Mac (not committed) for comparing over time.
+
+Thresholds are constants at the top of `deploy/health_report.py`. Usage numbers
+come from counters the bot saves once a minute (`core/metrics.py`, stored in
+`data/user_data.db` on the Pi); they start after the bot is deployed with
+tracking. `health_collect.py` runs on the Pi over SSH, so nothing needs
+installing there.
 
 ## Running Docker commands
 

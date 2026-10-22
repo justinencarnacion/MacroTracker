@@ -23,7 +23,7 @@ MacroTracker/
 ├── core/       Shared settings (.env loading), macro definitions, SQLite user store
 ├── cli/        Original terminal tracker and its config.json profiles
 ├── oauth/      Per-user Google OAuth (not used yet; future feature)
-├── deploy/     Dockerfile, docker-compose.yml, deploy.sh  → deploy/README.md
+├── deploy/     Dockerfile, docker-compose.yml, deploy.sh, health.sh → deploy/README.md
 ├── pi/         Raspberry Pi setup, maintenance, remote SSH → pi/README.md, pi/remote-access.md
 ├── secrets/    .env, credentials.json (never committed)    → secrets/README.md
 ├── data/       user_data.db (never committed)
@@ -41,7 +41,7 @@ MacroTracker/
 | `charts/` | `theme.py`, `today.py`, `week.py` | Draws PNG charts with matplotlib in Discord's dark-theme colors |
 | `tracking/` | `goals.py`, `summaries.py`, `service.py`, `meal_service.py` | Goal rules, Monday–Sunday and daily calculations, reading a user's meals in their timezone, safely editing and deleting meals |
 | `sheets/` | `sheet_manager.py`, `spreadsheet_manager.py` | Connecting to the sheet, per-user tabs, reading and editing meals |
-| `core/` | `settings.py`, `macros.py`, `user_store.py` | Loads `secrets/.env`; macro names and limits; stores goals, timezones and tab IDs in `data/user_data.db` |
+| `core/` | `settings.py`, `macros.py`, `user_store.py`, `metrics.py` | Loads `secrets/.env`; macro names and limits; stores goals, timezones and tab IDs in `data/user_data.db`; usage counters for the health report |
 | `cli/` | `main.py`, `display.py`, `config_manager.py`, `config.json` | Interactive terminal tracker |
 | `oauth/` | `oauth_manager.py` | Kept for a future version where each user owns a spreadsheet |
 | `web/` | `src/` (React components), `scripts/generate_demo.py` | The project website; its Discord demo is generated from the bot's own chart and embed code |
@@ -278,6 +278,20 @@ hosted web callback before they can work on a server.
   below the picture on small screens; a missing image hides the banner
   instead of showing a broken one
 - Ships with a placeholder banner until a real picture is added
+
+### Milestone 12: Health and usage report (2026-10-22)
+
+- `./deploy/health.sh`: one command from the Mac that reports the Pi's
+  temperature, power, CPU, RAM, and disk; the bot's status, crashes, memory,
+  and whether the deployed version matches GitHub; registered and active users;
+  requests, meals, and refused users; and per-model Gemini results and
+  free-tier usage, for the last 24 hours and 7 days
+- Warning thresholds flag problems (hot Pi, throttling, low memory or disk,
+  crashes, errors, quota limits, outdated deploy); each run is appended to
+  `data/health_history.csv` on the Mac
+- The bot now records usage counters (`core/metrics.py`), buffered in memory
+  and saved once a minute so messages never wait on the database; a failed
+  save never affects the bot
 
 **Next:** zero-AI logging to stretch the free AI quota (number-only meals,
 a `/log` command, saved meals).

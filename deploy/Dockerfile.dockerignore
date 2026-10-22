@@ -14,3 +14,4 @@ oauth_client.json
 deploy/deploy.sh
 web/
 .github/
+deploy/health*

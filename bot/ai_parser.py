@@ -72,21 +72,37 @@ def is_overloaded(error):
     )
 
 
-async def parse_input_with_ai(client, models, user_text):
-    """Try each model in order, moving on when one is overloaded."""
+def attempt_outcome(error):
+    """'rate_limited' (429), 'overloaded' (5xx), or 'error' for a failed model call."""
+    if isinstance(error, genai_errors.ClientError) and error.code == 429:
+        return "rate_limited"
+    if isinstance(error, genai_errors.ServerError):
+        return "overloaded"
+    return "error"
+
+
+async def parse_input_with_ai(client, models, user_text, on_attempt=None):
+    """Try each model in order, moving on when one is overloaded.
+
+    `on_attempt(model, outcome)` is called after every model call, with outcome
+    'ok', 'overloaded', 'rate_limited', or 'error' (used for health stats).
+    """
     if isinstance(models, str):
         models = [models]
+    report = on_attempt or (lambda model, outcome: None)
     for index, model in enumerate(models):
         try:
             response = await client.aio.models.generate_content(
                 model=model, contents=user_text, config=GENERATION_CONFIG
             )
         except genai_errors.APIError as error:
+            report(model, attempt_outcome(error))
             if not is_overloaded(error) or index == len(models) - 1:
                 raise
             logger.warning("Gemini model %s unavailable (%s); trying %s",
                            model, error.code, models[index + 1])
             continue
+        report(model, "ok")
         return validate_ai_response(response.text)
 
 

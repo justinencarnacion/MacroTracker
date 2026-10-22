@@ -20,6 +20,7 @@ from bot.commands.summaries import SummaryCommands
 from bot.replies import Replies, Reply
 from bot.views.meals import changes, describe_ref
 from bot.views.summary import SummaryView
+from core.metrics import Metrics
 from core.settings import Settings, SettingsError
 from core.user_store import UserStore
 from sheets.sheet_manager import connect_sheets, get_worksheet_for_user, worksheet_title
@@ -62,11 +63,14 @@ class MacroBot(commands.Bot):
         )
         self.membership = GuildMembershipChecker(self, settings.allowed_guild_id)
         self._user_locks = defaultdict(asyncio.Lock)
+        self.metrics = Metrics(self.user_store.database_path)
+        self._metrics_task = None
         self.tracking = None
         self.replies = None
         self.meals = None
 
     async def setup_hook(self):
+        self._metrics_task = asyncio.create_task(self._save_metrics_every_minute())
         self.spreadsheet = await asyncio.to_thread(
             connect_sheets,
             self.settings.google_credentials,
@@ -133,6 +137,7 @@ class MacroBot(commands.Bot):
                 self.user_store.ensure_user, str(user_id),
                 interaction.user.display_name.strip(),
             )
+            self.metrics.incr("button", kind)
             build = self.replies.today if kind == "today" else self.replies.week
             async with self.user_lock(user_id):
                 reply = Reply.of(await build(user))
@@ -157,9 +162,11 @@ class MacroBot(commands.Bot):
             async with self.user_lock(user_id):
                 if action == "delete":
                     await asyncio.to_thread(self.meals.delete, user, ref)
+                    self.metrics.incr("meal", "deleted")
                     message = f"🗑️ Deleted {describe_ref(ref)}"
                 else:
                     await asyncio.to_thread(self.meals.update, user, ref, values)
+                    self.metrics.incr("meal", "edited")
                     lines = changes(ref.__dict__, values)
                     message = f"✏️ Updated **{values['meal_name']}**\n" + "\n".join(
                         f"• {line}" for line in lines)
@@ -171,12 +178,29 @@ class MacroBot(commands.Bot):
         except Exception as error:
             await interaction.followup.send(self.error_reply(error, user_id), ephemeral=True)
 
+    async def _save_metrics_every_minute(self):
+        while True:
+            await asyncio.sleep(60)
+            await asyncio.to_thread(self.metrics.flush)
+
+    async def close(self):
+        if self._metrics_task:
+            self._metrics_task.cancel()
+        await asyncio.to_thread(self.metrics.flush)
+        await super().close()
+
+    def record_ai_attempt(self, model, outcome):
+        self.metrics.incr("ai_call", f"{model}:{outcome}")
+
     async def access_refusal(self, user_id):
         """A refusal message if the user may not use the bot right now, else None."""
         if not await self.membership.is_allowed(user_id):
+            self.metrics.incr("refused", "not_member")
             return "🔒 This bot is only available to members of its Discord server."
         if not self.rate_limiter.allow(user_id):
+            self.metrics.incr("refused", "rate_limited")
             return "⏳ You're sending messages too quickly. Please wait a minute."
+        self.metrics.seen_user(user_id)
         return None
 
     def user_lock(self, user_id):
@@ -186,10 +210,13 @@ class MacroBot(commands.Bot):
     def error_reply(self, error, user_id):
         """The user-facing message for an error while handling a request."""
         if isinstance(error, ParseError):
+            self.metrics.incr("request", "unreadable")
             return f"🤔 {error}\n\n{HELP_TEXT}"
         if is_overloaded(error):
+            self.metrics.incr("request", "all_busy")
             logger.warning("All Gemini models unavailable for %s: %s", user_id, error)
             return "⏳ The AI service is busy right now. Please try again in a minute."
+        self.metrics.incr("request", "error")
         logger.exception("Failed to process request for %s", user_id, exc_info=error)
         return "❌ I could not process that message. Please try again."
 
@@ -200,8 +227,11 @@ class MacroBot(commands.Bot):
             self.user_store.ensure_user, discord_id, display_name
         )
         parsed = await parse_input_with_ai(
-            self.ai_client, self.settings.gemini_models, message.content
+            self.ai_client, self.settings.gemini_models, message.content,
+            on_attempt=self.record_ai_attempt,
         )
+        self.metrics.incr("request", "answered")
+        self.metrics.incr("dm", parsed.intent)
 
         if parsed.intent == "UPDATE_GOALS":
             return await self.replies.set_goals(user, parsed.macros)
@@ -232,6 +262,7 @@ class MacroBot(commands.Bot):
             *(parsed.macros[key] for key in MACRO_KEYS),
         ]
         await asyncio.to_thread(self._append_meal, user, values)
+        self.metrics.incr("meal", "logged")
 
         source = "AI Estimated" if parsed.is_estimation else "Manual Input"
         logged = (
