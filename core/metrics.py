@@ -11,6 +11,7 @@ Metric names and labels:
     button    summary button ("today", "week")
     meal      "logged", "edited", "deleted"
     refused   "not_member", "rate_limited"
+    welcome   "sent", "dms_closed", "failed" (guide DMed to new server members)
     ai_call   "<model>:ok", "<model>:overloaded", "<model>:rate_limited", "<model>:error"
     request   "answered", "all_busy", "unreadable", "error"
 """

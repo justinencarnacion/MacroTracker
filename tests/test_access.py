@@ -50,6 +50,15 @@ class GuildMembershipCheckerTests(unittest.TestCase):
         asyncio.run(checker.is_allowed(1))
         self.assertEqual(guild.lookups, 2)
 
+    def test_forget_clears_a_cached_refusal(self):
+        guild = FakeGuild(set())
+        checker = GuildMembershipChecker(SimpleNamespace(get_guild=lambda guild_id: guild), 99)
+        self.assertFalse(asyncio.run(checker.is_allowed(5)))
+        guild.member_ids.add(5)  # they joined
+        self.assertFalse(asyncio.run(checker.is_allowed(5)))  # still cached
+        checker.forget(5)
+        self.assertTrue(asyncio.run(checker.is_allowed(5)))
+
     def test_no_guild_configured_allows_everyone(self):
         checker = GuildMembershipChecker(SimpleNamespace(), None)
         self.assertTrue(asyncio.run(checker.is_allowed(123)))

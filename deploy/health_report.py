@@ -172,6 +172,10 @@ def usage_section(report, usage):
         report.text("Usage tracking starts after the next deploy of the bot.")
         return
     report.row("Active users", f"{users.get('active_24h', 0)} (24h) · {users.get('active_7d', 0)} (7 days)")
+    welcome = usage["windows"]["7d"].get("welcome", {})
+    if welcome:
+        closed = welcome.get("dms_closed", 0)
+        report.row("New members welcomed (7d)", f"{welcome.get('sent', 0)} sent · {closed} had DMs closed")
 
     day, week = usage["windows"]["24h"], usage["windows"]["7d"]
     report.section("REQUESTS                     24 hours   7 days")

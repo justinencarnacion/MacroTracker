@@ -57,3 +57,7 @@ class GuildMembershipChecker:
 
         self._cache[user_id] = (allowed, self.clock() + self.cache_seconds)
         return allowed
+
+    def forget(self, user_id):
+        """Drop a cached answer, e.g. when the user has just joined the server."""
+        self._cache.pop(user_id, None)

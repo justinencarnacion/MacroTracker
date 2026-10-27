@@ -59,6 +59,7 @@ Run everything from the project root.
 | `set my goals to 2200 cals, 180p, 220c, 70f` | `/goals set` | Sets goals; the first time needs all four, later any subset |
 | — | `/edit` | Pick a meal from the last 7 days, change it in a form, confirm |
 | — | `/delete` | Pick a meal from the last 7 days and confirm before it's removed |
+| — | `/help` | The getting-started guide (also DMed automatically when someone joins the server) |
 | `set my timezone to America/New_York` | — | Meals and "today" use your local time |
 | anything else | — | Replies with help |
 
@@ -97,7 +98,9 @@ One-time Google setup: share the spreadsheet with the `client_email` from
 `secrets/credentials.json` and give it **Editor** access.
 
 One-time Discord setup: in the Developer Portal → your app → **Bot**, enable
-**Message Content Intent**. Invite the bot to the server whose ID you put in
+**Message Content Intent** and **Server Members Intent** (the second lets the
+bot welcome new members; without it the bot still runs, just without welcome
+DMs). Invite the bot to the server whose ID you put in
 `ALLOWED_GUILD_ID` (OAuth2 → URL Generator → scopes `bot` and
 `applications.commands`; the second is needed for slash commands). Slash
 commands are registered automatically each time the bot starts.
@@ -292,6 +295,18 @@ hosted web callback before they can work on a server.
 - The bot now records usage counters (`core/metrics.py`), buffered in memory
   and saved once a minute so messages never wait on the database; a failed
   save never affects the bot
+
+### Milestone 13: Welcome guide for new members (2026-10-22)
+
+- When someone joins the bot's Discord server, the bot DMs them a
+  getting-started guide: set goals, set timezone, log a meal, and the commands
+  for viewing and fixing progress (`bot/welcome.py`)
+- `/help` shows the same guide anytime
+- Joining clears any cached "not a member" refusal, so people who messaged the
+  bot before joining aren't locked out for 10 minutes
+- Uses Discord's Server Members Intent; if it isn't enabled in the Developer
+  Portal, the bot logs a clear message and runs without welcome DMs
+- Welcomes sent and closed-DM cases appear in `./deploy/health.sh`
 
 **Next:** zero-AI logging to stretch the free AI quota (number-only meals,
 a `/log` command, saved meals).

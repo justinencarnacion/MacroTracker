@@ -15,11 +15,13 @@ from google import genai
 
 from bot.access import GuildMembershipChecker, RateLimiter
 from bot.ai_parser import MACRO_KEYS, ParseError, is_overloaded, parse_input_with_ai
+from bot.commands.help import HelpCommands
 from bot.commands.meals import MealCommands
 from bot.commands.summaries import SummaryCommands
 from bot.replies import Replies, Reply
 from bot.views.meals import changes, describe_ref
 from bot.views.summary import SummaryView
+from bot.welcome import GUIDE
 from core.metrics import Metrics
 from core.settings import Settings, SettingsError
 from core.user_store import UserStore
@@ -37,6 +39,7 @@ HELP_TEXT = (
     "• `set my goals to 2200 cals, 180p, 220c, 70f` or `/goals set` — daily goals\n"
     "• `what are my goals?` or `/goals show`\n"
     "• `/edit` or `/delete` — fix a meal from the last 7 days\n"
+    "• `/help` — the full getting-started guide\n"
     "• `set my timezone to America/New_York` — so meals land on the right day"
 )
 
@@ -49,10 +52,14 @@ def format_macros(values):
 
 
 class MacroBot(commands.Bot):
-    def __init__(self, settings):
+    def __init__(self, settings, welcome_new_members=True):
         intents = discord.Intents.default()
         intents.message_content = True
+        # Seeing members join needs the privileged "Server Members Intent"
+        # (Developer Portal -> Bot). main() falls back without it if it's off.
+        intents.members = welcome_new_members
         super().__init__(command_prefix="!", intents=intents)
+        self.welcome_new_members = welcome_new_members
 
         self.settings = settings
         self.ai_client = genai.Client(api_key=settings.gemini_api_key)
@@ -84,6 +91,7 @@ class MacroBot(commands.Bot):
 
         await self.add_cog(SummaryCommands(self))
         await self.add_cog(MealCommands(self))
+        await self.add_cog(HelpCommands(self))
         self.add_view(SummaryView(self))  # keeps [Today] [Week] buttons working after restarts
         try:
             synced = await self.tree.sync()
@@ -94,10 +102,29 @@ class MacroBot(commands.Bot):
 
     async def on_ready(self):
         logger.info("Logged in as %s; MacroTracker bot is online.", self.user)
+        if not self.welcome_new_members:
+            logger.warning("Welcome DMs for new members are off (Server Members Intent not enabled)")
         if self.settings.allowed_guild_id is None:
             logger.warning(
                 "ALLOWED_GUILD_ID is not set; anyone who can DM the bot can use it."
             )
+
+    async def on_member_join(self, member):
+        """DM the getting-started guide to people who join the bot's server."""
+        allowed = self.settings.allowed_guild_id
+        if member.bot or (allowed is not None and member.guild.id != allowed):
+            return
+        self.membership.forget(member.id)  # they're a member now, even if refused earlier
+        try:
+            await member.send(GUIDE)
+            self.metrics.incr("welcome", "sent")
+            logger.info("Sent welcome guide to new member %s", member.id)
+        except discord.Forbidden:
+            self.metrics.incr("welcome", "dms_closed")
+            logger.info("New member %s doesn't accept DMs; no welcome sent", member.id)
+        except discord.HTTPException:
+            self.metrics.incr("welcome", "failed")
+            logger.exception("Could not send welcome guide to %s", member.id)
 
     async def on_message(self, message):
         if message.author.bot:
@@ -296,7 +323,17 @@ def main():
         logger.error("Configuration error: %s", error)
         raise SystemExit(1)
 
-    MacroBot(settings).run(settings.discord_token, log_handler=None)
+    try:
+        MacroBot(settings).run(settings.discord_token, log_handler=None)
+    except discord.PrivilegedIntentsRequired:
+        logger.error(
+            "Discord refused the Server Members Intent. Turn it on in the Developer "
+            "Portal (Bot -> Privileged Gateway Intents) to enable welcome DMs. "
+            "Starting without welcome DMs."
+        )
+        MacroBot(settings, welcome_new_members=False).run(
+            settings.discord_token, log_handler=None
+        )
 
 
 if __name__ == "__main__":
