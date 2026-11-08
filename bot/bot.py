@@ -52,7 +52,8 @@ def format_macros(values):
 
 
 class MacroBot(commands.Bot):
-    def __init__(self, settings, welcome_new_members=True):
+    def __init__(self, settings, welcome_new_members=True, *, ai_client=None,
+                 user_store=None, spreadsheet=None):
         intents = discord.Intents.default()
         intents.message_content = True
         # Seeing members join needs the privileged "Server Members Intent"
@@ -62,9 +63,11 @@ class MacroBot(commands.Bot):
         self.welcome_new_members = welcome_new_members
 
         self.settings = settings
-        self.ai_client = genai.Client(api_key=settings.gemini_api_key)
-        self.user_store = UserStore()
-        self.spreadsheet = None
+        # The simulated test runs (testing/) pass fakes for these three;
+        # normally the real Gemini client, database, and spreadsheet are used.
+        self.ai_client = ai_client or genai.Client(api_key=settings.gemini_api_key)
+        self.user_store = user_store or UserStore()
+        self.spreadsheet = spreadsheet
         self.rate_limiter = RateLimiter(
             settings.rate_limit_count, settings.rate_limit_seconds
         )
@@ -78,16 +81,7 @@ class MacroBot(commands.Bot):
 
     async def setup_hook(self):
         self._metrics_task = asyncio.create_task(self._save_metrics_every_minute())
-        self.spreadsheet = await asyncio.to_thread(
-            connect_sheets,
-            self.settings.google_credentials,
-            self.settings.sheet_name,
-            self.settings.sheet_id,
-        )
-        logger.info("Connected to spreadsheet '%s'", self.spreadsheet.title)
-        self.tracking = TrackingService(self.spreadsheet, self.settings.default_timezone)
-        self.replies = Replies(self.tracking, self.user_store)
-        self.meals = MealService(self.spreadsheet, self.tracking)
+        await self.connect_services()
 
         await self.add_cog(SummaryCommands(self))
         await self.add_cog(MealCommands(self))
@@ -99,6 +93,21 @@ class MacroBot(commands.Bot):
                         ", ".join(f"/{command.name}" for command in synced))
         except discord.HTTPException:
             logger.exception("Could not sync slash commands; DMs still work")
+
+    async def connect_services(self):
+        """Open the spreadsheet (unless one was passed in) and build the services
+        that read and write it. Needs no Discord connection."""
+        if self.spreadsheet is None:
+            self.spreadsheet = await asyncio.to_thread(
+                connect_sheets,
+                self.settings.google_credentials,
+                self.settings.sheet_name,
+                self.settings.sheet_id,
+            )
+        logger.info("Connected to spreadsheet '%s'", self.spreadsheet.title)
+        self.tracking = TrackingService(self.spreadsheet, self.settings.default_timezone)
+        self.replies = Replies(self.tracking, self.user_store)
+        self.meals = MealService(self.spreadsheet, self.tracking)
 
     async def on_ready(self):
         logger.info("Logged in as %s; MacroTracker bot is online.", self.user)
