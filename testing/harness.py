@@ -15,9 +15,10 @@ only the network edges are fake. Each action's response time is recorded in
 
 import tempfile
 import time
-import warnings
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import discord
 
@@ -28,6 +29,7 @@ from bot.commands.meals import MealCommands
 from bot.commands.summaries import SummaryCommands
 from core.settings import Settings
 from core.user_store import UserStore
+from sheets.sheet_manager import get_or_create_worksheet, worksheet_title
 from testing.fakes.discord_api import FakeGuildLookup, FakeInteraction, FakeMessage, FakeUser
 from testing.fakes.gemini import FakeGemini
 from testing.fakes.spreadsheet import FakeSpreadsheet
@@ -103,13 +105,18 @@ class Harness:
         self.bot.metrics.flush()
         self._tempdir.cleanup()
 
-    def user(self, name, member=True, accepts_dms=True):
+    def user(self, name, member=True, accepts_dms=True, is_bot=False):
         """A new simulated person; `member=False` means not in the server."""
-        user = FakeUser(self._next_user_id, name, GUILD_ID, accepts_dms)
+        user = FakeUser(self._next_user_id, name, GUILD_ID, accepts_dms, is_bot)
         self._next_user_id += 1
         if member:
             self.member_ids.add(user.id)
         return SimUser(self, user)
+
+    def counted(self, name, label):
+        """How many times a usage metric has been counted so far."""
+        return sum(count for (_, metric, metric_label), count in self.bot.metrics._counts.items()
+                   if (metric, metric_label) == (name, str(label)))
 
     def record(self, action, user_id, started):
         self.timings.append(Timing(action, user_id, time.monotonic() - started))
@@ -131,6 +138,23 @@ class SimUser:
     def inbox(self):
         return self.user.inbox
 
+    @property
+    def tab(self):
+        """The title of this user's worksheet tab under their current name."""
+        return worksheet_title(self.user.display_name, str(self.id))
+
+    def rows(self, tab=None):
+        """This user's saved meal rows, without the header."""
+        return self.harness.sheets.rows(tab or self.tab)[1:]
+
+    def seed_meal(self, name, calories=500, protein=30, carbs=50, fat=15, days_ago=0, time="08:00"):
+        """Put a meal straight into the sheet, as if logged earlier."""
+        today = datetime.now(ZoneInfo(self.harness.timezone)).date()
+        day = today - timedelta(days=days_ago)
+        sheet = get_or_create_worksheet(self.harness.sheets, self.tab)
+        sheet.append_row([f"{day} {time}", name, calories, protein, carbs, fat])
+        return sheet
+
     async def _run(self, action, coroutine):
         before = len(self.inbox)
         started = time.monotonic()
@@ -147,6 +171,12 @@ class SimUser:
     async def dm(self, text):
         return await self._run("dm", self.harness.bot.on_message(FakeMessage(self.user, text)))
 
+    async def say_in_server(self, text):
+        """Post in a server channel, which the bot should ignore."""
+        message = FakeMessage(self.user, text)
+        message.channel = object()
+        return await self._run("server message", self.harness.bot.on_message(message))
+
     async def slash(self, name, in_server=False, **options):
         """Run a slash command, in DMs or (in_server=True) in a server channel."""
         cog_name, attribute = COMMANDS[name]
@@ -162,6 +192,8 @@ class SimUser:
                        if isinstance(item, discord.ui.Button) and item.label == label), None)
         if button is None:
             raise AssertionError(f"No {label!r} button; buttons are {sent.labels()}")
+        if button.disabled:
+            raise AssertionError(f"The {label!r} button is disabled, so it can't be pressed")
         return await self._run(f"press {label}", self._interact(view, button.callback))
 
     async def choose(self, sent, index=0):
@@ -177,10 +209,9 @@ class SimUser:
         modal = sent.modal
         for key, value in fields.items():
             wanted = key.replace("_", " ").lower()
-            with warnings.catch_warnings():  # discord.py 2.7 deprecates reading .label
-                warnings.simplefilter("ignore", DeprecationWarning)
-                text_input = next(item for item in modal.children
-                                  if item.label.lower().startswith(wanted))
+            # ._underlying because discord.py 2.7 warns on every read of .label
+            text_input = next(item for item in modal.children
+                              if item._underlying.label.lower().startswith(wanted))
             text_input._value = str(value)
         interaction = FakeInteraction(self.user)
 
