@@ -13,7 +13,8 @@ Metric names and labels:
     refused   "not_member", "rate_limited"
     welcome   "sent", "dms_closed", "failed" (guide DMed to new server members)
     ai_call   "<model>:ok", "<model>:overloaded", "<model>:rate_limited", "<model>:error"
-    request   "answered", "all_busy", "unreadable", "error"
+    request   "answered", "all_busy", "quota_used_up", "unreadable",
+              "not_saved" (meal understood, Sheets write failed), "sheets_down", "error"
 """
 
 import logging

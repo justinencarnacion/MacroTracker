@@ -2,12 +2,21 @@ from datetime import date, datetime, timedelta
 import logging
 
 import gspread
+import requests
 
 logger = logging.getLogger(__name__)
 
 
 class SheetConnectionError(RuntimeError):
     pass
+
+
+def is_temporary_error(error):
+    """True for Sheets failures worth retrying: rate limits, server errors, and
+    network trouble. Anything else (e.g. lost permission) won't fix itself."""
+    if isinstance(error, gspread.exceptions.APIError):
+        return error.code == 429 or error.code >= 500
+    return isinstance(error, (requests.ConnectionError, requests.Timeout))
 
 
 def connect_sheets(credentials_info, sheet_name, sheet_id=None):

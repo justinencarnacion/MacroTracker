@@ -199,9 +199,12 @@ def ai_section(report, day, week, quota_today):
     report.section("AI (GEMINI)")
     requests_day, requests_week = day.get("request", {}), week.get("request", {})
     for key, label in (("answered", "Answered"), ("all_busy", "All models busy"),
-                       ("unreadable", "Couldn't understand"), ("error", "Other errors")):
+                       ("quota_used_up", "Out of daily quota"),
+                       ("unreadable", "Couldn't understand"),
+                       ("not_saved", "Meal not saved (Sheets)"),
+                       ("sheets_down", "Sheets unavailable"), ("error", "Other errors")):
         value_day, value_week = requests_day.get(key, 0), requests_week.get(key, 0)
-        bad = key in ("all_busy", "error") and value_day > 0
+        bad = key in ("all_busy", "quota_used_up", "not_saved", "sheets_down", "error") and value_day > 0
         report.row(label, f"{value_day:>8} {value_week:>8}", "warn" if bad else None,
                    f"{value_day} request(s) failed in the last 24h ({label.lower()})")
 

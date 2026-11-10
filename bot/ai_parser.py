@@ -72,6 +72,13 @@ def is_overloaded(error):
     )
 
 
+def is_daily_quota(error):
+    """True for a 429 whose details name a per-day quota (the free tier's daily
+    limit), as opposed to a per-minute limit that clears on its own."""
+    return (isinstance(error, genai_errors.ClientError) and error.code == 429
+            and "PerDay" in str(error.details))
+
+
 def attempt_outcome(error):
     """'rate_limited' (429), 'overloaded' (5xx), or 'error' for a failed model call."""
     if isinstance(error, genai_errors.ClientError) and error.code == 429:

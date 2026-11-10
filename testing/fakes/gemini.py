@@ -98,11 +98,22 @@ def answer(text):
             "is_estimation": True, **_estimate(lowered)}
 
 
-def api_error(code):
-    """The error google-genai raises for an HTTP status code."""
+DAILY_QUOTA_DETAILS = [{
+    "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+    "violations": [{"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}],
+}]
+
+
+def api_error(code, daily_quota=False):
+    """The error google-genai raises for an HTTP status code. A 429 is a
+    per-minute limit unless `daily_quota`, which names the per-day quota in
+    the error details the way Google does."""
     error_class = genai_errors.ServerError if code >= 500 else genai_errors.ClientError
     status = {429: "RESOURCE_EXHAUSTED", 503: "UNAVAILABLE"}.get(code, "ERROR")
-    return error_class(code, {"error": {"code": code, "message": "fake failure", "status": status}})
+    body = {"code": code, "message": "fake failure", "status": status}
+    if daily_quota:
+        body["details"] = DAILY_QUOTA_DETAILS
+    return error_class(code, {"error": body})
 
 
 class FakeGemini:
@@ -121,7 +132,7 @@ class FakeGemini:
         self._down = {}  # model or "*" -> status code, until restore()
         self._scripted = defaultdict(deque)  # model or "*" -> upcoming failures
         self.calls = Counter()  # model -> calls received
-        self.outcomes = Counter()  # (model, "ok" / status code / "garbage")
+        self.outcomes = Counter()  # (model, "ok" / status code / "garbage" / "daily_quota")
         self.in_flight = 0
         self.peak_in_flight = 0
 
@@ -157,6 +168,8 @@ class FakeGemini:
             self.outcomes[(model, outcome)] += 1
             if outcome == "garbage":
                 return SimpleNamespace(text="Sure! Here are your macros: lots of protein")
+            if outcome == "daily_quota":
+                raise api_error(429, daily_quota=True)
             if outcome != "ok":
                 raise api_error(outcome)
             return SimpleNamespace(text=json.dumps(answer(contents)))
@@ -171,5 +184,5 @@ class FakeGemini:
             if key in self._down:
                 return self._down[key]
         if self.daily_quota is not None and self.calls[model] > self.daily_quota:
-            return 429
+            return "daily_quota"
         return "ok"

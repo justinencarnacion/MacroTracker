@@ -95,6 +95,7 @@ class Harness:
         )
         self.guild_lookup = FakeGuildLookup(GUILD_ID, self.member_ids)
         self.bot.membership = GuildMembershipChecker(self.guild_lookup, GUILD_ID)
+        self.bot.save_retry_delays = (0, 0)  # same retries, without the real waits
         await self.bot.connect_services()
         self.summary_cog = SummaryCommands(self.bot)
         self.meal_cog = MealCommands(self.bot)

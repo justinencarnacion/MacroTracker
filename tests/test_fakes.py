@@ -76,7 +76,7 @@ class FakeGeminiTests(unittest.TestCase):
         gemini = FakeGemini(daily_quota=1)
         self.parse(gemini, "banana")
         self.parse(gemini, "banana")  # first model is out of quota; the next answers
-        self.assertEqual(gemini.outcomes[(MODELS[0], 429)], 1)
+        self.assertEqual(gemini.outcomes[(MODELS[0], "daily_quota")], 1)
 
 
 class FakeInteractionTests(unittest.TestCase):

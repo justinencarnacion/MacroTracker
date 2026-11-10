@@ -1,6 +1,6 @@
 import asyncio
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import os
 from zoneinfo import ZoneInfo
@@ -14,7 +14,8 @@ from discord.ext import commands
 from google import genai
 
 from bot.access import GuildMembershipChecker, RateLimiter
-from bot.ai_parser import MACRO_KEYS, ParseError, is_overloaded, parse_input_with_ai
+from bot.ai_parser import (MACRO_KEYS, ParseError, is_daily_quota, is_overloaded,
+                           parse_input_with_ai)
 from bot.commands.help import HelpCommands
 from bot.commands.meals import MealCommands
 from bot.commands.summaries import SummaryCommands
@@ -25,11 +26,14 @@ from bot.welcome import GUIDE
 from core.metrics import Metrics
 from core.settings import Settings, SettingsError
 from core.user_store import UserStore
-from sheets.sheet_manager import connect_sheets, get_worksheet_for_user, worksheet_title
+from sheets.sheet_manager import (connect_sheets, get_worksheet_for_user, is_temporary_error,
+                                  worksheet_title)
 from tracking.meal_service import MealChanged, MealService
 from tracking.service import TrackingService
 
 logger = logging.getLogger("macrotracker")
+
+QUOTA_TIMEZONE = ZoneInfo("America/Los_Angeles")  # Gemini's daily quota resets at midnight here
 
 HELP_TEXT = (
     "👋 I'm your macro tracker. DM me things like:\n"
@@ -42,6 +46,24 @@ HELP_TEXT = (
     "• `/help` — the full getting-started guide\n"
     "• `set my timezone to America/New_York` — so meals land on the right day"
 )
+
+
+class MealNotSaved(Exception):
+    """Gemini understood the meal, but writing it to Sheets failed."""
+
+    def __init__(self, parsed):
+        super().__init__(f"Could not save {parsed.meal_name!r}")
+        self.parsed = parsed
+
+
+def until_quota_reset(now=None):
+    """'about 5 hours' / 'under an hour': time until midnight Pacific."""
+    now = now or datetime.now(QUOTA_TIMEZONE)
+    midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    hours = round((midnight - now).total_seconds() / 3600)
+    if hours < 1:
+        return "under an hour"
+    return "about 1 hour" if hours == 1 else f"about {hours} hours"
 
 
 def format_macros(values):
@@ -74,6 +96,8 @@ class MacroBot(commands.Bot):
         self.membership = GuildMembershipChecker(self, settings.allowed_guild_id)
         self._user_locks = defaultdict(asyncio.Lock)
         self.metrics = Metrics(self.user_store.database_path)
+        # Seconds to wait before each retry of a meal save that hit a brief Sheets error.
+        self.save_retry_delays = (1, 3)
         self._metrics_task = None
         self.tracking = None
         self.replies = None
@@ -248,6 +272,25 @@ class MacroBot(commands.Bot):
         if isinstance(error, ParseError):
             self.metrics.incr("request", "unreadable")
             return f"🤔 {error}\n\n{HELP_TEXT}"
+        if isinstance(error, MealNotSaved):
+            self.metrics.incr("request", "not_saved")
+            logger.error("Could not save a meal for %s", user_id, exc_info=error.__cause__)
+            meal = error.parsed
+            reason = ("Google Sheets isn't responding" if is_temporary_error(error.__cause__)
+                      else "something went wrong saving it to Google Sheets")
+            return (f"⚠️ I couldn't save **{meal.meal_name}** ({meal.macros['calories']} kcal): "
+                    f"{reason}. Nothing was logged, so please send it again in a few minutes.")
+        if is_temporary_error(error):
+            self.metrics.incr("request", "sheets_down")
+            logger.warning("Google Sheets unavailable for %s: %s", user_id, error)
+            return ("📄 Google Sheets isn't responding, so I can't load your meals right now. "
+                    "Please try again in a few minutes.")
+        if is_daily_quota(error):
+            self.metrics.incr("request", "quota_used_up")
+            logger.warning("Gemini daily quota used up for %s: %s", user_id, error)
+            return ("⏳ Today's free AI limit has been used up. It resets at midnight Pacific "
+                    f"({until_quota_reset()} from now). Until then `/today`, `/week`, `/goals`, "
+                    "`/edit` and `/delete` still work.")
         if is_overloaded(error):
             self.metrics.incr("request", "all_busy")
             logger.warning("All Gemini models unavailable for %s: %s", user_id, error)
@@ -297,7 +340,10 @@ class MacroBot(commands.Bot):
             parsed.meal_name,
             *(parsed.macros[key] for key in MACRO_KEYS),
         ]
-        await asyncio.to_thread(self._append_meal, user, values)
+        try:
+            await self._save_meal(user, values)
+        except Exception as error:
+            raise MealNotSaved(parsed) from error
         self.metrics.incr("meal", "logged")
 
         source = "AI Estimated" if parsed.is_estimation else "Manual Input"
@@ -308,6 +354,18 @@ class MacroBot(commands.Bot):
         user = await asyncio.to_thread(self.user_store.get, discord_id)
         left_today = await self.replies.left_today(user)
         return f"{logged}\n{left_today}" if left_today else logged
+
+    async def _save_meal(self, user, values):
+        """Append the meal, retrying brief Sheets errors: Gemini has already been
+        paid for, so a hiccup shouldn't lose the meal or cost the user a retry."""
+        for delay in (*self.save_retry_delays, None):
+            try:
+                return await asyncio.to_thread(self._append_meal, user, values)
+            except Exception as error:
+                if delay is None or not is_temporary_error(error):
+                    raise
+                logger.warning("Sheets error saving a meal (%s); retrying in %ss", error, delay)
+                await asyncio.sleep(delay)
 
     def _append_meal(self, user, values):
         """Blocking Sheets work; always call through asyncio.to_thread."""
